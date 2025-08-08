@@ -9,25 +9,27 @@ import (
 )
 
 type ApplicationContext struct {
-	context map[reflect.Type][]BeanDefinition
-	named   map[string]BeanDefinition
+	ctx                map[reflect.Type][]BeanDefinition
+	named              map[string]BeanDefinition
+	preDestroyEligible []BeanDefinition
 }
 
 func newApplicationContext() *ApplicationContext {
 	return &ApplicationContext{
-		context: make(map[reflect.Type][]BeanDefinition),
-		named:   make(map[string]BeanDefinition),
+		ctx:                make(map[reflect.Type][]BeanDefinition),
+		named:              make(map[string]BeanDefinition),
+		preDestroyEligible: make([]BeanDefinition, 0),
 	}
 }
 
 func (c *ApplicationContext) Register(bean BeanDefinition) {
-	slog.Debug(fmt.Sprintf("%T: registering %s", *c, bean))
+	slog.Info(fmt.Sprintf("%T: registering %s", *c, bean))
 	if len(bean.getName()) > 0 {
 		_, ok := c.named[bean.getName()]
 		lang.AssertState(!ok, "Bean with name '%s' already registered", bean.getName())
 		c.named[bean.getName()] = bean
 	}
-	c.context[bean.getType()] = append(c.context[bean.getType()], bean)
+	c.ctx[bean.getType()] = append(c.ctx[bean.getType()], bean)
 }
 
 func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
@@ -40,7 +42,7 @@ func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 		var candidates []BeanDefinition
 		var primaryCandidates []BeanDefinition
 
-		for t, beans := range c.context {
+		for t, beans := range c.ctx {
 			if c.eligible(t, inject.t) {
 				candidates = append(candidates, beans...)
 				for _, bean := range beans {
@@ -51,12 +53,12 @@ func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 			}
 		}
 
-		lang.AssertState(len(primaryCandidates) <= 1, "Multiple primary beans of type %v. Use name qualifier.\nFound: %v", inject.t, primaryCandidates)
+		lang.AssertState(len(primaryCandidates) <= 1, "Multiple primary beans of type %v found. Use name qualifier.\n%v", inject.t, primaryCandidates)
 		if len(primaryCandidates) == 1 {
 			instance = c.beanInstance(primaryCandidates[0])
 		} else {
 			lang.AssertState(len(candidates) > 0, "No bean of type %v found", inject.t)
-			lang.AssertState(len(candidates) <= 1, "Multiple beans of type %v. Use name qualifier or mark one of the beans primary.\nFound: %v", inject.t, candidates)
+			lang.AssertState(len(candidates) <= 1, "Multiple beans of type %v found. Use name qualifier or mark one of the beans primary.\n%v", inject.t, candidates)
 			instance = c.beanInstance(candidates[0])
 		}
 	}
@@ -68,6 +70,9 @@ func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	if bean.getScope() == Singleton {
 		if bean.getInstance() == nil {
 			slog.Debug(fmt.Sprintf("%T: instantiate %s", *c, bean))
+			if bean.preDestroyEligible() {
+				c.preDestroyEligible = append(c.preDestroyEligible, bean)
+			}
 			return bean.instantiate()
 		}
 		return bean.getInstance()
@@ -103,4 +108,12 @@ func (c *ApplicationContext) eligible(registered, requested reflect.Type) bool {
 	}
 
 	return false
+}
+
+func (c *ApplicationContext) Shutdown() {
+	slog.Info(fmt.Sprintf("%T: shutdown started", *c))
+	for i := len(c.preDestroyEligible) - 1; i >= 0; i-- {
+		c.preDestroyEligible[i].preDestroy()
+	}
+	slog.Info(fmt.Sprintf("%T: shutdown finished", *c))
 }

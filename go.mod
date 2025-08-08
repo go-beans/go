@@ -3,7 +3,7 @@ module github.com/go-beans/go
 go 1.24.5
 
 require (
-	github.com/go-external-config/go v1.0.5
+	github.com/go-external-config/go v1.0.6
 	github.com/stretchr/testify v1.10.0
 )
 
@@ -14,5 +14,3 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/go-external-config/go => ../go

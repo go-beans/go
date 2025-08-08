@@ -1,10 +1,13 @@
 package ioc
 
 import (
+	"context"
+	"sync"
+
 	"github.com/go-external-config/go/lang"
 )
 
-var context *ApplicationContext
+var applicationContext *ApplicationContext
 
 // Inject bean by type and (optionaly) name
 func Inject[T any](name ...string) func() T {
@@ -20,9 +23,18 @@ func Bean[T any]() *BeanDefinitionImpl[T] {
 	return newBeanDefinition[T]()
 }
 
+func GracefulShutdown(ctx context.Context, wg *sync.WaitGroup) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-ctx.Done()
+		ApplicationContextInstance().Shutdown()
+	}()
+}
+
 func ApplicationContextInstance() *ApplicationContext {
-	if context == nil {
-		context = newApplicationContext()
+	if applicationContext == nil {
+		applicationContext = newApplicationContext()
 	}
-	return context
+	return applicationContext
 }

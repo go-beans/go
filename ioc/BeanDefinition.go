@@ -2,6 +2,7 @@ package ioc
 
 import (
 	"fmt"
+	"log/slog"
 	"reflect"
 
 	"github.com/go-external-config/go/lang"
@@ -22,6 +23,9 @@ type BeanDefinition interface {
 	getScope() Scope
 	instantiate() any
 	getInstance() any
+	postConstruct()
+	preDestroyEligible() bool
+	preDestroy()
 	String() string
 }
 
@@ -79,8 +83,9 @@ func (b *BeanDefinitionImpl[T]) PostConstruct(f func(*T)) *BeanDefinitionImpl[T]
 	return b
 }
 
-// Clean-up resources before shutdown. Is not called on prototype beans.
+// Clean-up resources before shutdown. Not called on prototype beans.
 func (b *BeanDefinitionImpl[T]) PreDestroy(f func(*T)) *BeanDefinitionImpl[T] {
+	lang.AssertState(b.scope != Prototype, "PreDestroy cannot be used for Prototype scope beans")
 	b.preDestroyMethod = f
 	return b
 }
@@ -110,10 +115,27 @@ func (b *BeanDefinitionImpl[T]) getScope() Scope {
 
 func (b *BeanDefinitionImpl[T]) instantiate() any {
 	b.instance = b.factoryMethod()
+	b.postConstruct()
+	return b.instance
+}
+
+func (b *BeanDefinitionImpl[T]) postConstruct() {
 	if b.postConstructMethod != nil {
 		b.postConstructMethod(b.instance.(*T))
 	}
-	return b.instance
+}
+
+func (b *BeanDefinitionImpl[T]) preDestroyEligible() bool {
+	return b.preDestroyMethod != nil
+}
+
+func (b *BeanDefinitionImpl[T]) preDestroy() {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error(fmt.Sprintf("%s PreDestroy: %s", b.t, r))
+		}
+	}()
+	b.preDestroyMethod(b.instance.(*T))
 }
 
 func (b *BeanDefinitionImpl[T]) getInstance() any {

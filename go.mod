@@ -3,7 +3,7 @@ module github.com/go-beans/go
 go 1.24.5
 
 require (
-	github.com/go-external-config/go v1.0.6
+	github.com/go-external-config/go v1.0.9
 	github.com/stretchr/testify v1.10.0
 )
 
@@ -12,5 +12,6 @@ require (
 	github.com/expr-lang/expr v1.17.5 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

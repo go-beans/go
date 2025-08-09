@@ -21,6 +21,7 @@ type BeanDefinition interface {
 	getName() string
 	isPrimary() bool
 	getScope() Scope
+	getProfiles() []string
 	instantiate() any
 	getInstance() any
 	postConstruct()
@@ -34,6 +35,7 @@ type BeanDefinitionImpl[T any] struct {
 	name                string
 	scope               Scope
 	primary             bool
+	profiles            []string
 	factoryMethod       func() *T
 	postConstructMethod func(*T)
 	preDestroyMethod    func(*T)
@@ -44,12 +46,6 @@ func newBeanDefinition[T any]() *BeanDefinitionImpl[T] {
 	return &BeanDefinitionImpl[T]{
 		t: lang.TypeOf[T](),
 	}
-}
-
-// Set optional name
-func (b *BeanDefinitionImpl[T]) Name(name string) *BeanDefinitionImpl[T] {
-	b.name = name
-	return b
 }
 
 // Set optional scope
@@ -65,9 +61,21 @@ func (b *BeanDefinitionImpl[T]) Scope(scope string) *BeanDefinitionImpl[T] {
 	return b
 }
 
+// Set optional name
+func (b *BeanDefinitionImpl[T]) Name(name string) *BeanDefinitionImpl[T] {
+	b.name = name
+	return b
+}
+
 // Mark this bean as primary
 func (b *BeanDefinitionImpl[T]) Primary() *BeanDefinitionImpl[T] {
 	b.primary = true
+	return b
+}
+
+// Profile binding
+func (b *BeanDefinitionImpl[T]) Profile(profileExpr ...string) *BeanDefinitionImpl[T] {
+	b.profiles = profileExpr
 	return b
 }
 
@@ -111,6 +119,10 @@ func (b *BeanDefinitionImpl[T]) isPrimary() bool {
 
 func (b *BeanDefinitionImpl[T]) getScope() Scope {
 	return b.scope
+}
+
+func (b *BeanDefinitionImpl[T]) getProfiles() []string {
+	return b.profiles
 }
 
 func (b *BeanDefinitionImpl[T]) instantiate() any {

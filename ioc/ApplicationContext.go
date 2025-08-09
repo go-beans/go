@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"reflect"
 
+	"github.com/go-external-config/go/env"
 	"github.com/go-external-config/go/lang"
 )
 
@@ -23,13 +24,15 @@ func newApplicationContext() *ApplicationContext {
 }
 
 func (c *ApplicationContext) Register(bean BeanDefinition) {
-	slog.Info(fmt.Sprintf("%T: registering %s", *c, bean))
-	if len(bean.getName()) > 0 {
-		_, ok := c.named[bean.getName()]
-		lang.AssertState(!ok, "Bean with name '%s' already registered", bean.getName())
-		c.named[bean.getName()] = bean
+	if env.MatchesProfiles(bean.getProfiles()...) {
+		slog.Info(fmt.Sprintf("%T: registering %s", *c, bean))
+		if len(bean.getName()) > 0 {
+			_, ok := c.named[bean.getName()]
+			lang.AssertState(!ok, "Bean with name '%s' already registered", bean.getName())
+			c.named[bean.getName()] = bean
+		}
+		c.ctx[bean.getType()] = append(c.ctx[bean.getType()], bean)
 	}
-	c.ctx[bean.getType()] = append(c.ctx[bean.getType()], bean)
 }
 
 func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {

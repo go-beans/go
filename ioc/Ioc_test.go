@@ -11,16 +11,30 @@ import (
 	"github.com/go-beans/go/ioc"
 	"github.com/go-external-config/go/env"
 	"github.com/go-external-config/go/util"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-func init() {
-	ioc.Bean[CalculatorImpl]().Primary().Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).PreDestroy((*CalculatorImpl).PreDestroy).Register()
-	ioc.Bean[CalculatorImpl]().Scope("prototype").Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).Register()
+func TestMain(m *testing.M) {
+	fmt.Println("Before all")
+	env.SetActiveProfiles("test")
+
+	ioc.Bean[CalculatorImpl]().Primary().Profile("test").Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).PreDestroy((*CalculatorImpl).PreDestroy).Register()
+	ioc.Bean[CalculatorImpl]().Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).Register()
 	ioc.Bean[AddOperation]().Name("addOperation").Factory(NewAddOperation).Register()
 	ioc.Bean[SubtractOperation]().Name("subtractOperation").Factory(NewSubtractOperation).Register()
 	ioc.Bean[MultiplyOperation]().Name("multiplyOperation").Factory(NewMultiplyOperation).Register()
 	ioc.Bean[DivideOperation]().Name("divideOperation").Factory(NewDivideOperation).PreDestroy((*DivideOperation).PreDestroy).Register()
+
+	ioc.Bean[MockCalculator]().Primary().Profile("!test").Factory(func() *MockCalculator {
+		mockCalculator := new(MockCalculator)
+		mockCalculator.On("Add", 100, 2).Return(102)
+		mockCalculator.On("Multiply", 102, 2).Return(204)
+		mockCalculator.On("Subtract", 204, 2).Return(202)
+		mockCalculator.On("Divide", 202, 2).Return(101)
+		mockCalculator.On("LastOperation").Return("TBD")
+		return mockCalculator
+	}).Register()
 
 	ioc.Bean[map[string]string]().Name("preinitializedMap").Factory(func() *map[string]string {
 		m := make(map[string]string)
@@ -39,25 +53,48 @@ func init() {
 			},
 		}
 	}).Register()
+
+	m.Run()
+
+	fmt.Println("After all")
+	gracefulShutdown()
 }
 
 func Test_Ioc(t *testing.T) {
-	env.SetActiveProfiles("test")
+	t.Run("should decode property", func(t *testing.T) {
+		preinitializedMap := *ioc.Inject[*map[string]string]("preinitializedMap")()
+		httpClient := ioc.Inject[*http.Client]()
+
+		require.Equal(t, "value", preinitializedMap["key"])
+		require.Equal(t, "200 OK", util.OptionalOfCommaErr(httpClient().Get("http://example.com")).Value().Status)
+	})
+}
+
+func Test_IocCalculator(t *testing.T) {
 	t.Run("should decode property", func(t *testing.T) {
 		consumer := NewConsumer()
 		calculator := ioc.Inject[Calculator]()
-		preinitializedMap := *ioc.Inject[*map[string]string]("preinitializedMap")()
-		httpClient := ioc.Inject[*http.Client]()
 
 		require.Equal(t, "PostConstruct: 4", calculator().LastOperation())
 		require.Equal(t, 101, consumer.compute(100, 2))
 		require.Equal(t, "divide", calculator().LastOperation())
-		require.Equal(t, "value", preinitializedMap["key"])
-		require.Equal(t, "200 OK", util.OptionalOfCommaErr(httpClient().Get("http://example.com")).Value().Status)
+	})
+}
 
-		gracefulShutdown()
+func Test_IocCalculatorMock(t *testing.T) {
+	t.Run("should decode property", func(t *testing.T) {
+		t.Skip("Switch MockCalculator profile to 'test', switch CalculatorImpl profile to '!test', disable Test_IocCalculator, enable this test")
+		mockCalculator := ioc.Inject[*MockCalculator]()()
+		consumer := NewConsumer()
+		calculator := ioc.Inject[Calculator]()
 
-		require.Equal(t, "PreDestroy", calculator().LastOperation())
+		clearMethodExpectations(&mockCalculator.Mock, "LastOperation")
+		mockCalculator.On("LastOperation").Return("PostConstruct: 4")
+		require.Equal(t, "PostConstruct: 4", calculator().LastOperation())
+		require.Equal(t, 101, consumer.compute(100, 2))
+		clearMethodExpectations(&mockCalculator.Mock, "LastOperation")
+		mockCalculator.On("LastOperation").Return("divide")
+		require.Equal(t, "divide", calculator().LastOperation())
 	})
 }
 
@@ -75,6 +112,7 @@ type Calculator interface {
 	Multiply(a, b int) int
 	Divide(a, b int) int
 	LastOperation() string
+	SetLastOperation(string)
 }
 
 type CalculatorImpl struct {
@@ -124,11 +162,11 @@ type Operation interface {
 }
 
 type AddOperation struct {
-	calculator func() *CalculatorImpl
+	calculator func() Calculator
 }
 
 func NewAddOperation() *AddOperation {
-	return &AddOperation{calculator: ioc.Inject[*CalculatorImpl]()}
+	return &AddOperation{calculator: ioc.Inject[Calculator]()}
 }
 func (o *AddOperation) Calculate(a, b int) int {
 	o.calculator().SetLastOperation("add")
@@ -136,11 +174,11 @@ func (o *AddOperation) Calculate(a, b int) int {
 }
 
 type SubtractOperation struct {
-	calculator func() *CalculatorImpl
+	calculator func() Calculator
 }
 
 func NewSubtractOperation() *SubtractOperation {
-	return &SubtractOperation{calculator: ioc.Inject[*CalculatorImpl]()}
+	return &SubtractOperation{calculator: ioc.Inject[Calculator]()}
 }
 func (o *SubtractOperation) Calculate(a, b int) int {
 	o.calculator().SetLastOperation("subtract")
@@ -148,11 +186,11 @@ func (o *SubtractOperation) Calculate(a, b int) int {
 }
 
 type MultiplyOperation struct {
-	calculator func() *CalculatorImpl
+	calculator func() Calculator
 }
 
 func NewMultiplyOperation() *MultiplyOperation {
-	return &MultiplyOperation{calculator: ioc.Inject[*CalculatorImpl]()}
+	return &MultiplyOperation{calculator: ioc.Inject[Calculator]()}
 }
 func (o *MultiplyOperation) Calculate(a, b int) int {
 	o.calculator().SetLastOperation("multiply")
@@ -160,11 +198,11 @@ func (o *MultiplyOperation) Calculate(a, b int) int {
 }
 
 type DivideOperation struct {
-	calculator func() *CalculatorImpl
+	calculator func() Calculator
 }
 
 func NewDivideOperation() *DivideOperation {
-	return &DivideOperation{calculator: ioc.Inject[*CalculatorImpl]()}
+	return &DivideOperation{calculator: ioc.Inject[Calculator]()}
 }
 func (o *DivideOperation) Calculate(a, b int) int {
 	o.calculator().SetLastOperation("divide")
@@ -188,4 +226,44 @@ func (c Consumer) compute(a, b int) int {
 	x = c.calculator().Subtract(x, b)
 	x = c.calculator().Divide(x, b)
 	return x
+}
+
+type MockCalculator struct {
+	mock.Mock
+}
+
+func (m *MockCalculator) Add(a, b int) int {
+	args := m.Called(a, b)
+	return args.Int(0)
+}
+func (m *MockCalculator) Subtract(a, b int) int {
+	args := m.Called(a, b)
+	return args.Int(0)
+}
+func (m *MockCalculator) Multiply(a, b int) int {
+	args := m.Called(a, b)
+	return args.Int(0)
+}
+func (m *MockCalculator) Divide(a, b int) int {
+	args := m.Called(a, b)
+	return args.Int(0)
+}
+func (m *MockCalculator) LastOperation() string {
+	args := m.Called()
+	return args.String(0)
+}
+func (m *MockCalculator) SetLastOperation(o string) {
+	m.Called(o)
+}
+
+func clearMethodExpectations(m *mock.Mock, methodName string) {
+	filtered := m.ExpectedCalls[:0] // reuse underlying array
+
+	for _, call := range m.ExpectedCalls {
+		if call.Method != methodName {
+			filtered = append(filtered, call)
+		}
+	}
+
+	m.ExpectedCalls = filtered
 }

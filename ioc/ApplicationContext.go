@@ -4,15 +4,18 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"sync"
 
+	"github.com/go-beans/go/concurrent"
 	"github.com/go-external-config/go/env"
 	"github.com/go-external-config/go/lang"
 )
 
 type ApplicationContext struct {
-	ctx                map[reflect.Type][]BeanDefinition
-	named              map[string]BeanDefinition
-	preDestroyEligible []BeanDefinition
+	ctx                     map[reflect.Type][]BeanDefinition
+	named                   map[string]BeanDefinition
+	preDestroyEligible      []BeanDefinition
+	preDestroyEligibleMutex sync.Mutex
 }
 
 func newApplicationContext() *ApplicationContext {
@@ -74,7 +77,9 @@ func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
 		if bean.getInstance() == nil {
 			slog.Debug(fmt.Sprintf("%T: instantiate %s", *c, bean))
 			if bean.preDestroyEligible() {
-				c.preDestroyEligible = append(c.preDestroyEligible, bean)
+				concurrent.Atomic(&c.preDestroyEligibleMutex, func() {
+					c.preDestroyEligible = append(c.preDestroyEligible, bean)
+				})
 			}
 			return bean.instantiate()
 		}
@@ -113,10 +118,13 @@ func (c *ApplicationContext) eligible(registered, requested reflect.Type) bool {
 	return false
 }
 
-func (c *ApplicationContext) Shutdown() {
-	slog.Info(fmt.Sprintf("%T: shutdown started", *c))
+func (c *ApplicationContext) Close() {
+	slog.Info(fmt.Sprintf("%T: closing context", *c))
 	for i := len(c.preDestroyEligible) - 1; i >= 0; i-- {
 		c.preDestroyEligible[i].preDestroy()
 	}
-	slog.Info(fmt.Sprintf("%T: shutdown finished", *c))
+	c.ctx = make(map[reflect.Type][]BeanDefinition)
+	c.named = make(map[string]BeanDefinition)
+	c.preDestroyEligible = make([]BeanDefinition, 0)
+	slog.Info(fmt.Sprintf("%T: context closed", *c))
 }

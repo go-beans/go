@@ -28,7 +28,7 @@ func GracefulShutdown(ctx context.Context, wg *sync.WaitGroup) {
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		ApplicationContextInstance().Shutdown()
+		ApplicationContextInstance().Close()
 	}()
 }
 

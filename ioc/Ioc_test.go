@@ -1,10 +1,8 @@
 package ioc_test
 
 import (
-	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +16,9 @@ import (
 func TestMain(m *testing.M) {
 	fmt.Println("Before all")
 	env.SetActiveProfiles("test")
+
+	ioc.Bean[Counter]().Name("singletonCounter").Factory(NewCounter).Register()
+	ioc.Bean[Counter]().Scope("prototype").Name("prototypeCounter").Factory(NewCounter).Register()
 
 	ioc.Bean[CalculatorImpl]().Primary().Profile("test").Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).PreDestroy((*CalculatorImpl).PreDestroy).Register()
 	ioc.Bean[CalculatorImpl]().Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).Register()
@@ -57,15 +58,28 @@ func TestMain(m *testing.M) {
 	m.Run()
 
 	fmt.Println("After all")
-	gracefulShutdown()
+	ioc.ApplicationContextInstance().Close()
 }
 
 func Test_Ioc(t *testing.T) {
 	t.Run("should decode property", func(t *testing.T) {
-		preinitializedMap := *ioc.Inject[*map[string]string]("preinitializedMap")()
-		httpClient := ioc.Inject[*http.Client]()
+		preinitializedMap := ioc.Inject[*map[string]string]("preinitializedMap")
+		require.Equal(t, "value", (*preinitializedMap())["key"])
 
-		require.Equal(t, "value", preinitializedMap["key"])
+		singletonCounter1 := ioc.Inject[*Counter]("singletonCounter")
+		singletonCounter2 := ioc.Inject[*Counter]("singletonCounter")
+		prototypeCounter1 := ioc.Inject[*Counter]("prototypeCounter")
+		prototypeCounter2 := ioc.Inject[*Counter]("prototypeCounter")
+		singletonCounter1().count++
+		singletonCounter2().count++
+		prototypeCounter1().count++
+		prototypeCounter2().count++
+		require.Equal(t, 2, singletonCounter1().count)
+		require.Equal(t, 2, singletonCounter2().count)
+		require.Equal(t, 1, prototypeCounter1().count)
+		require.Equal(t, 1, prototypeCounter2().count)
+
+		httpClient := ioc.Inject[*http.Client]()
 		require.Equal(t, "200 OK", util.OptionalOfCommaErr(httpClient().Get("http://example.com")).Value().Status)
 	})
 }
@@ -98,12 +112,12 @@ func Test_IocCalculatorMock(t *testing.T) {
 	})
 }
 
-func gracefulShutdown() {
-	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
-	ioc.GracefulShutdown(ctx, &wg)
-	cancel()
-	wg.Wait()
+type Counter struct {
+	count int
+}
+
+func NewCounter() *Counter {
+	return &Counter{}
 }
 
 type Calculator interface {
@@ -209,7 +223,7 @@ func (o *DivideOperation) Calculate(a, b int) int {
 	return a / b
 }
 func (o *DivideOperation) PreDestroy() {
-	panic("PreDestroy failed")
+	panic("failed")
 }
 
 type Consumer struct {

@@ -62,7 +62,7 @@ func TestMain(m *testing.M) {
 }
 
 func Test_Ioc(t *testing.T) {
-	t.Run("should decode property", func(t *testing.T) {
+	t.Run("general examples", func(t *testing.T) {
 		preinitializedMap := ioc.Inject[*map[string]string]("preinitializedMap")
 		require.Equal(t, "value", (*preinitializedMap())["key"])
 
@@ -85,7 +85,7 @@ func Test_Ioc(t *testing.T) {
 }
 
 func Test_IocCalculator(t *testing.T) {
-	t.Run("should decode property", func(t *testing.T) {
+	t.Run("calculator singleton share data, post construct executed", func(t *testing.T) {
 		consumer := NewConsumer()
 		calculator := ioc.Inject[Calculator]()
 
@@ -96,7 +96,7 @@ func Test_IocCalculator(t *testing.T) {
 }
 
 func Test_IocCalculatorMock(t *testing.T) {
-	t.Run("should decode property", func(t *testing.T) {
+	t.Run("mock any bean for test", func(t *testing.T) {
 		t.Skip("Switch MockCalculator profile to 'test', switch CalculatorImpl profile to '!test', disable Test_IocCalculator, enable this test")
 		mockCalculator := ioc.Inject[*MockCalculator]()()
 		consumer := NewConsumer()

@@ -17,7 +17,7 @@ func TestMain(m *testing.M) {
 	fmt.Println("Before all")
 	env.SetActiveProfiles("test")
 
-	ioc.Bean[Counter]().Name("singletonCounter").Factory(NewCounter).Register()
+	ioc.Bean[Counter]().Name("singletonCounter", "counter").Factory(NewCounter).Register()
 	ioc.Bean[Counter]().Scope("prototype").Name("prototypeCounter").Factory(NewCounter).Register()
 
 	ioc.Bean[CalculatorImpl]().Primary().Profile("test").Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).PreDestroy((*CalculatorImpl).PreDestroy).Register()
@@ -78,6 +78,9 @@ func Test_Ioc(t *testing.T) {
 		require.Equal(t, 2, singletonCounter2().count)
 		require.Equal(t, 1, prototypeCounter1().count)
 		require.Equal(t, 1, prototypeCounter2().count)
+
+		counterAlias := ioc.Inject[*Counter]("counter")
+		require.Equal(t, 2, counterAlias().count)
 
 		httpClient := ioc.Inject[*http.Client]()
 		require.Equal(t, "200 OK", util.OptionalOfCommaErr(httpClient().Get("http://example.com")).Value().Status)

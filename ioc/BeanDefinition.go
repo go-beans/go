@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"strings"
 
 	"github.com/go-external-config/go/lang"
 )
@@ -18,7 +19,7 @@ const (
 
 type BeanDefinition interface {
 	getType() reflect.Type
-	getName() string
+	getNames() []string
 	isPrimary() bool
 	getScope() Scope
 	getProfiles() []string
@@ -32,7 +33,7 @@ type BeanDefinition interface {
 
 type BeanDefinitionImpl[T any] struct {
 	t                   reflect.Type
-	name                string
+	names               []string
 	scope               Scope
 	primary             bool
 	profiles            []string
@@ -61,9 +62,9 @@ func (b *BeanDefinitionImpl[T]) Scope(scope string) *BeanDefinitionImpl[T] {
 	return b
 }
 
-// Set optional name
-func (b *BeanDefinitionImpl[T]) Name(name string) *BeanDefinitionImpl[T] {
-	b.name = name
+// Set optional name(s)
+func (b *BeanDefinitionImpl[T]) Name(names ...string) *BeanDefinitionImpl[T] {
+	b.names = names
 	return b
 }
 
@@ -109,8 +110,8 @@ func (b *BeanDefinitionImpl[T]) getType() reflect.Type {
 	return b.t
 }
 
-func (b *BeanDefinitionImpl[T]) getName() string {
-	return b.name
+func (b *BeanDefinitionImpl[T]) getNames() []string {
+	return b.names
 }
 
 func (b *BeanDefinitionImpl[T]) isPrimary() bool {
@@ -156,5 +157,5 @@ func (b *BeanDefinitionImpl[T]) getInstance() any {
 
 // Implements String
 func (b *BeanDefinitionImpl[T]) String() string {
-	return fmt.Sprintf("%s[%s%s%s]", b.t, lang.If(b.scope == Singleton, "singleton", "prototype"), lang.If(b.primary, " primary", ""), lang.If(len(b.name) > 0, " "+b.name, ""))
+	return fmt.Sprintf("%s[%s%s%s]", b.t, lang.If(b.scope == Singleton, "singleton", "prototype"), lang.If(b.primary, " primary", ""), lang.If(len(b.names) > 0, " "+strings.Join(b.names, ", "), ""))
 }

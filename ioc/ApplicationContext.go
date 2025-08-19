@@ -29,10 +29,12 @@ func newApplicationContext() *ApplicationContext {
 func (c *ApplicationContext) Register(bean BeanDefinition) {
 	if env.MatchesProfiles(bean.getProfiles()...) {
 		slog.Info(fmt.Sprintf("%T: registering %s", *c, bean))
-		if len(bean.getName()) > 0 {
-			_, ok := c.named[bean.getName()]
-			lang.AssertState(!ok, "Bean with name '%s' already registered", bean.getName())
-			c.named[bean.getName()] = bean
+		if len(bean.getNames()) > 0 {
+			for _, name := range bean.getNames() {
+				_, ok := c.named[name]
+				lang.AssertState(!ok, "Bean with name '%s' already registered", name)
+				c.named[name] = bean
+			}
 		}
 		c.ctx[bean.getType()] = append(c.ctx[bean.getType()], bean)
 	}

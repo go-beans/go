@@ -77,7 +77,7 @@ func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	if bean.getScope() == Singleton {
 		if bean.getInstance() == nil {
-			slog.Debug(fmt.Sprintf("%T: instantiate %s", *c, bean))
+			slog.Debug(fmt.Sprintf("%T: instantiating %s", *c, bean))
 			if bean.preDestroyEligible() {
 				concurrent.Atomic(&c.preDestroyEligibleMutex, func() {
 					c.preDestroyEligible = append(c.preDestroyEligible, bean)
@@ -87,7 +87,7 @@ func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
 		}
 		return bean.getInstance()
 	}
-	slog.Debug(fmt.Sprintf("%T: instantiate %s", *c, bean))
+	slog.Debug(fmt.Sprintf("%T: instantiating %s", *c, bean))
 	return bean.instantiate()
 }
 
@@ -123,6 +123,7 @@ func (c *ApplicationContext) eligible(registered, requested reflect.Type) bool {
 func (c *ApplicationContext) Close() {
 	slog.Info(fmt.Sprintf("%T: closing context", *c))
 	for i := len(c.preDestroyEligible) - 1; i >= 0; i-- {
+		slog.Debug(fmt.Sprintf("%T: destroying %v", *c, c.preDestroyEligible[i]))
 		c.preDestroyEligible[i].preDestroy()
 	}
 	c.ctx = make(map[reflect.Type][]BeanDefinition)

@@ -3,8 +3,10 @@ package ioc
 import (
 	"fmt"
 	"log/slog"
+	"os"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/go-beans/go/concurrent"
 	"github.com/go-external-config/go/env"
@@ -16,19 +18,22 @@ type ApplicationContext struct {
 	named                   map[string]BeanDefinition
 	preDestroyEligible      []BeanDefinition
 	preDestroyEligibleMutex sync.Mutex
+	startTime               time.Time
 }
 
 func newApplicationContext() *ApplicationContext {
+	slog.Info(fmt.Sprintf("ioc.ApplicationContext: starting with PID %d", os.Getpid()))
 	return &ApplicationContext{
 		ctx:                make(map[reflect.Type][]BeanDefinition),
 		named:              make(map[string]BeanDefinition),
 		preDestroyEligible: make([]BeanDefinition, 0),
+		startTime:          time.Now(),
 	}
 }
 
 func (c *ApplicationContext) Register(bean BeanDefinition) {
 	if env.MatchesProfiles(bean.getProfiles()...) {
-		slog.Info(fmt.Sprintf("%T: registering %s", *c, bean))
+		slog.Debug(fmt.Sprintf("ioc.ApplicationContext: registering %s", bean))
 		if len(bean.getNames()) > 0 {
 			for _, name := range bean.getNames() {
 				_, ok := c.named[name]
@@ -77,7 +82,6 @@ func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	if bean.getScope() == Singleton {
 		if bean.getInstance() == nil {
-			slog.Debug(fmt.Sprintf("%T: instantiating %s", *c, bean))
 			if bean.preDestroyEligible() {
 				concurrent.Atomic(&c.preDestroyEligibleMutex, func() {
 					c.preDestroyEligible = append(c.preDestroyEligible, bean)
@@ -87,7 +91,6 @@ func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
 		}
 		return bean.getInstance()
 	}
-	slog.Debug(fmt.Sprintf("%T: instantiating %s", *c, bean))
 	return bean.instantiate()
 }
 
@@ -121,13 +124,14 @@ func (c *ApplicationContext) eligible(registered, requested reflect.Type) bool {
 }
 
 func (c *ApplicationContext) Close() {
-	slog.Info(fmt.Sprintf("%T: closing context", *c))
+	startTheshold := time.Now()
+	slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d services", len(c.ctx)))
 	for i := len(c.preDestroyEligible) - 1; i >= 0; i-- {
-		slog.Debug(fmt.Sprintf("%T: destroying %v", *c, c.preDestroyEligible[i]))
+		slog.Debug(fmt.Sprintf("ioc.ApplicationContext: destroying %v", c.preDestroyEligible[i]))
 		c.preDestroyEligible[i].preDestroy()
 	}
 	c.ctx = make(map[reflect.Type][]BeanDefinition)
 	c.named = make(map[string]BeanDefinition)
 	c.preDestroyEligible = make([]BeanDefinition, 0)
-	slog.Info(fmt.Sprintf("%T: context closed", *c))
+	slog.Info(fmt.Sprintf("ioc.ApplicationContext: context closed in %v, uptime %v", time.Since(startTheshold), time.Since(c.startTime)))
 }

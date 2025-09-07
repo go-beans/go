@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/go-external-config/go/lang"
 )
@@ -28,6 +29,7 @@ type BeanDefinition interface {
 	postConstruct()
 	preDestroyEligible() bool
 	preDestroy()
+	getMutex() *sync.Mutex
 	String() string
 }
 
@@ -41,6 +43,7 @@ type BeanDefinitionImpl[T any] struct {
 	postConstructMethod func(*T)
 	preDestroyMethod    func(*T)
 	instance            any
+	mutex               sync.Mutex
 }
 
 func newBeanDefinition[T any]() *BeanDefinitionImpl[T] {
@@ -153,6 +156,10 @@ func (b *BeanDefinitionImpl[T]) preDestroy() {
 
 func (b *BeanDefinitionImpl[T]) getInstance() any {
 	return b.instance
+}
+
+func (b *BeanDefinitionImpl[T]) getMutex() *sync.Mutex {
+	return &b.mutex
 }
 
 // Implements String

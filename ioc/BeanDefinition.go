@@ -39,9 +39,9 @@ type BeanDefinitionImpl[T any] struct {
 	scope               Scope
 	primary             bool
 	profiles            []string
-	factoryMethod       func() *T
-	postConstructMethod func(*T)
-	preDestroyMethod    func(*T)
+	factoryMethod       func() T
+	postConstructMethod func(T)
+	preDestroyMethod    func(T)
 	instance            any
 	mutex               sync.Mutex
 }
@@ -84,19 +84,19 @@ func (b *BeanDefinitionImpl[T]) Profile(profileExpr ...string) *BeanDefinitionIm
 }
 
 // Set the factory method reference or anonymous function with actual implementation
-func (b *BeanDefinitionImpl[T]) Factory(f func() *T) *BeanDefinitionImpl[T] {
+func (b *BeanDefinitionImpl[T]) Factory(f func() T) *BeanDefinitionImpl[T] {
 	b.factoryMethod = f
 	return b
 }
 
 // It is safe to use injected beans at this point
-func (b *BeanDefinitionImpl[T]) PostConstruct(f func(*T)) *BeanDefinitionImpl[T] {
+func (b *BeanDefinitionImpl[T]) PostConstruct(f func(T)) *BeanDefinitionImpl[T] {
 	b.postConstructMethod = f
 	return b
 }
 
 // Clean-up resources before shutdown. Not called on prototype beans.
-func (b *BeanDefinitionImpl[T]) PreDestroy(f func(*T)) *BeanDefinitionImpl[T] {
+func (b *BeanDefinitionImpl[T]) PreDestroy(f func(T)) *BeanDefinitionImpl[T] {
 	lang.AssertState(b.scope != Prototype, "PreDestroy cannot be used for Prototype scope beans")
 	b.preDestroyMethod = f
 	return b
@@ -137,7 +137,7 @@ func (b *BeanDefinitionImpl[T]) instantiate() any {
 
 func (b *BeanDefinitionImpl[T]) postConstruct() {
 	if b.postConstructMethod != nil {
-		b.postConstructMethod(b.instance.(*T))
+		b.postConstructMethod(b.instance.(T))
 	}
 }
 
@@ -151,7 +151,7 @@ func (b *BeanDefinitionImpl[T]) preDestroy() {
 			slog.Error(fmt.Sprintf("%s PreDestroy: %s", b.t, r))
 		}
 	}()
-	b.preDestroyMethod(b.instance.(*T))
+	b.preDestroyMethod(b.instance.(T))
 }
 
 func (b *BeanDefinitionImpl[T]) getInstance() any {

@@ -17,17 +17,17 @@ func TestMain(m *testing.M) {
 	fmt.Println("Before all")
 	env.SetActiveProfiles("test")
 
-	ioc.Bean[Counter]().Name("singletonCounter", "counter").Factory(NewCounter).Register()
-	ioc.Bean[Counter]().Scope("prototype").Name("prototypeCounter").Factory(NewCounter).Register()
+	ioc.Bean[*Counter]().Name("singletonCounter", "counter").Factory(NewCounter).Register()
+	ioc.Bean[*Counter]().Scope("prototype").Name("prototypeCounter").Factory(NewCounter).Register()
 
-	ioc.Bean[CalculatorImpl]().Primary().Profile("test").Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).PreDestroy((*CalculatorImpl).PreDestroy).Register()
-	ioc.Bean[CalculatorImpl]().Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).Register()
-	ioc.Bean[AddOperation]().Name("addOperation").Factory(NewAddOperation).Register()
-	ioc.Bean[SubtractOperation]().Name("subtractOperation").Factory(NewSubtractOperation).Register()
-	ioc.Bean[MultiplyOperation]().Name("multiplyOperation").Factory(NewMultiplyOperation).Register()
-	ioc.Bean[DivideOperation]().Name("divideOperation").Factory(NewDivideOperation).PreDestroy((*DivideOperation).PreDestroy).Register()
+	ioc.Bean[*CalculatorImpl]().Primary().Profile("test").Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).PreDestroy((*CalculatorImpl).PreDestroy).Register()
+	ioc.Bean[*CalculatorImpl]().Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).Register()
+	ioc.Bean[*AddOperation]().Name("addOperation").Factory(NewAddOperation).Register()
+	ioc.Bean[*SubtractOperation]().Name("subtractOperation").Factory(NewSubtractOperation).Register()
+	ioc.Bean[*MultiplyOperation]().Name("multiplyOperation").Factory(NewMultiplyOperation).Register()
+	ioc.Bean[*DivideOperation]().Name("divideOperation").Factory(NewDivideOperation).PreDestroy((*DivideOperation).PreDestroy).Register()
 
-	ioc.Bean[MockCalculator]().Primary().Profile("!test").Factory(func() *MockCalculator {
+	ioc.Bean[*MockCalculator]().Primary().Profile("!test").Factory(func() *MockCalculator {
 		mockCalculator := new(MockCalculator)
 		mockCalculator.On("Add", 100, 2).Return(102)
 		mockCalculator.On("Multiply", 102, 2).Return(204)
@@ -37,13 +37,13 @@ func TestMain(m *testing.M) {
 		return mockCalculator
 	}).Register()
 
-	ioc.Bean[map[string]string]().Name("preinitializedMap").Factory(func() *map[string]string {
+	ioc.Bean[*map[string]string]().Name("preinitializedMap").Factory(func() *map[string]string {
 		m := make(map[string]string)
 		m["key"] = "value"
 		return &m
 	}).Register()
 
-	ioc.Bean[http.Client]().Factory(func() *http.Client {
+	ioc.Bean[*http.Client]().Factory(func() *http.Client {
 		return &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{

@@ -29,7 +29,7 @@ This metadata translates to a set of properties that make up each bean definitio
 
 A bean definition is essentially a recipe for creating one or more objects. The container looks at the recipe for a named bean when asked and uses the configuration metadata encapsulated by that bean definition to create (or acquire) an actual object. `type` can be pointer to a struct `*MyService` or interface `MyInterface`. `*MyService` implements (can be assigned to) `MyInterface` if methods have a pointer receiver. You can provide `factory` as a reference to `func NewMyService() *MyService` or inline implementation like
 
-	ioc.Bean[http.Client]().Profile("prod").Factory(func() *http.Client {
+	ioc.Bean[*http.Client]().Profile("prod").Factory(func() *http.Client {
 		return &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
@@ -48,6 +48,8 @@ Actual instantiation is lazy and happens (once for default, singleton scope) whe
 	...
  	// somewhere inside method logic
 	s.httpClient().Get("http://example.com") // here
+
+> Dedicate a file aka _context_ or _configuration_ for beans definitions inside package `init` method. This can be a file in a root package with the same name as a package name for services implementated and grouped by this package. One can reuse configured and ready-to-go services in different parts of application by for importing package where needed and injecting beans.
 
 ## Dependencies
 
@@ -132,5 +134,5 @@ You can programmatically set active profiles by calling `env.SetActiveProfiles("
 go get github.com/go-beans/go
 ```
 
-### See also
+## See also
 [github.com/go-external-config/go](https://github.com/go-external-config/go)

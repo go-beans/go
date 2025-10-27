@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-beans/go/ioc"
 	"github.com/go-external-config/go/env"
-	"github.com/go-external-config/go/util"
+	"github.com/go-external-config/go/util/optional"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -83,7 +83,7 @@ func Test_Ioc(t *testing.T) {
 		require.Equal(t, 2, counterAlias().count)
 
 		httpClient := ioc.Inject[*http.Client]()
-		require.Equal(t, "200 OK", util.OptionalOfCommaErr(httpClient().Get("http://example.com")).Value().Status)
+		require.Equal(t, "200 OK", optional.OfCommaErr(httpClient().Get("http://example.com")).Value().Status)
 	})
 }
 

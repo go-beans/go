@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -147,8 +148,8 @@ func (b *BeanDefinitionImpl[T]) preDestroyEligible() bool {
 
 func (b *BeanDefinitionImpl[T]) preDestroy() {
 	defer func() {
-		if r := recover(); r != nil {
-			slog.Error(fmt.Sprintf("%s PreDestroy: %s", b.t, r))
+		if err := recover(); err != nil {
+			slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", b, err, debug.Stack()))
 		}
 	}()
 	b.preDestroyMethod(b.instance.(T))

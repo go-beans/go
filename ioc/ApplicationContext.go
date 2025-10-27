@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"reflect"
+	"runtime/debug"
 	"time"
 
 	"github.com/go-beans/go/concurrent"
@@ -80,6 +81,13 @@ func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 }
 
 func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
+	defer func() {
+		if err := recover(); err != nil {
+			slog.Error(fmt.Sprintf("Could not initialize bean %v\n%v\n%s", bean, err, debug.Stack()))
+			c.Close()
+			os.Exit(1)
+		}
+	}()
 	if bean.getScope() == Singleton {
 		if bean.getInstance() == nil {
 			concurrent.Atomic(bean.getMutex(), func() {

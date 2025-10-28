@@ -62,8 +62,8 @@ main.go may look like the following:
 	var maintenanceJob = ioc.Inject[*MaintenanceJob]()
 
 	func main() {
-	    httpServer.Start()
-	    maintenanceJob.Schedule()
+	    httpServer().Start()
+	    maintenanceJob().Schedule()
 	    shutdown.Wait()
 	}
 

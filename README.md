@@ -41,6 +41,8 @@ A bean definition is essentially a recipe for creating one or more objects. The 
 		}
 	}).Register()
 
+> Dedicate a file a.k.a. _context_ or _configuration_ for beans definitions inside package `init` method. This can be a file in a root package with the same name as a package name for services implemented and grouped by this package. One can reuse configured and ready-to-go services in different parts of application by for importing package where needed and injecting beans.
+
 Actual instantiation is lazy and happens (once for default, singleton scope) when calling the provider method
 
 	// somewhere inside factory method
@@ -49,7 +51,21 @@ Actual instantiation is lazy and happens (once for default, singleton scope) whe
  	// somewhere inside method logic
 	s.httpClient().Get("http://example.com") // here
 
-> Dedicate a file a.k.a. _context_ or _configuration_ for beans definitions inside package `init` method. This can be a file in a root package with the same name as a package name for services implemented and grouped by this package. One can reuse configured and ready-to-go services in different parts of application by for importing package where needed and injecting beans.
+main.go may look like the following:  
+
+	package main
+
+	import (...)
+
+	var shutdown = ioc.ShutdownWaitGroup()
+	var httpServer = ioc.Inject[*HttpServer]()
+	var maintenanceJob = ioc.Inject[*MaintenanceJob]()
+
+	func main() {
+	    httpServer.Start()
+	    maintenanceJob.Schedule()
+	    shutdown.Wait()
+	}
 
 ## Dependencies
 

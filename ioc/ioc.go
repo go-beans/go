@@ -2,7 +2,10 @@ package ioc
 
 import (
 	"context"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"github.com/go-external-config/go/lang"
 )
@@ -21,6 +24,19 @@ func Inject[T any](name ...string) func() T {
 // Register bean
 func Bean[T any]() *BeanDefinitionImpl[T] {
 	return newBeanDefinition[T]()
+}
+
+func ShutdownWaitGroup() *sync.WaitGroup {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	var shutdown sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	GracefulShutdown(ctx, &shutdown)
+	go func() {
+		<-sig
+		cancel()
+	}()
+	return &shutdown
 }
 
 func GracefulShutdown(ctx context.Context, wg *sync.WaitGroup) {

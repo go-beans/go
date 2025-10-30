@@ -136,14 +136,12 @@ func (c *ApplicationContext) eligible(registered, requested reflect.Type) bool {
 }
 
 func (c *ApplicationContext) Close() {
+	applicationContext = nil
 	startTheshold := time.Now()
 	slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d running services", c.servicesCount))
 	for i := len(c.preDestroyEligible) - 1; i >= 0; i-- {
 		slog.Debug(fmt.Sprintf("ioc.ApplicationContext: destroying %v", c.preDestroyEligible[i]))
 		c.preDestroyEligible[i].preDestroy()
 	}
-	c.ctx = make(map[reflect.Type][]BeanDefinition)
-	c.named = make(map[string]BeanDefinition)
-	c.preDestroyEligible = make([]BeanDefinition, 0)
 	slog.Info(fmt.Sprintf("ioc.ApplicationContext: context closed in %v, uptime %v", time.Since(startTheshold), time.Since(c.startTime)))
 }

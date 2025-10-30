@@ -29,7 +29,7 @@ This metadata translates to a set of properties that make up each bean definitio
 
 A bean definition is essentially a recipe for creating one or more objects. The container looks at the recipe for a named bean when asked and uses the configuration metadata encapsulated by that bean definition to create (or acquire) an actual object. `type` can be pointer to a struct `*MyService` or interface `MyInterface`. `*MyService` implements (can be assigned to) `MyInterface` if methods have a pointer receiver. You can provide `factory` as a reference to `func NewMyService() *MyService` or inline implementation like
 
-	ioc.Bean[*http.Client]().Profile("prod").Factory(func() *http.Client {
+	ioc.Bean[*http.Client]().Factory(func() *http.Client {
 		return &http.Client{
 			Timeout: 60 * time.Second,
 			Transport: &http.Transport{
@@ -62,8 +62,8 @@ main.go may look like the following:
 	var maintenanceJob = ioc.Inject[*MaintenanceJob]()
 
 	func main() {
-	    httpServer.Start()
-	    maintenanceJob.Schedule()
+	    httpServer().Start()
+	    maintenanceJob().Schedule()
 	    shutdown.Wait()
 	}
 

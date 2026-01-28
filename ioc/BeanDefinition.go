@@ -152,7 +152,9 @@ func (b *BeanDefinitionImpl[T]) preDestroy() {
 			slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", b, err, debug.Stack()))
 		}
 	}()
-	b.preDestroyMethod(b.instance.(T))
+	if b.instance != nil {
+		b.preDestroyMethod(b.instance.(T))
+	}
 }
 
 func (b *BeanDefinitionImpl[T]) getInstance() any {

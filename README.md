@@ -57,6 +57,19 @@ main.go may look like the following:
 
 	import (...)
 
+	var maintenanceJob = ioc.Inject[*MaintenanceJob]()
+
+	func main() {
+	    defer ioc.ApplicationContextInstance().Close()
+	    maintenanceJob().Run()
+	}
+
+or
+
+	package main
+
+	import (...)
+
 	var shutdown = ioc.ShutdownWaitGroup()
 	var httpServer = ioc.Inject[*HttpServer]()
 	var maintenanceJob = ioc.Inject[*MaintenanceJob]()

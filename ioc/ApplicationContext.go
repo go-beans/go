@@ -90,7 +90,7 @@ func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	}()
 	if bean.getScope() == Singleton {
 		if bean.getInstance() == nil {
-			concurrent.Atomic(bean.getMutex(), func() {
+			concurrent.Synchronized(bean.getMutex(), func() {
 				if bean.getInstance() == nil {
 					if bean.preDestroyEligible() {
 						c.preDestroyEligible = append(c.preDestroyEligible, bean)

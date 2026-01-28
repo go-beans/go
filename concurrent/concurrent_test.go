@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_Atomic(t *testing.T) {
+func Test_Synchronized(t *testing.T) {
 	t.Run("should produce sane results", func(t *testing.T) {
 		var x int
 		var wg sync.WaitGroup
@@ -20,7 +20,7 @@ func Test_Atomic(t *testing.T) {
 		for i := 0; i < n; i++ {
 			go func() {
 				defer wg.Done()
-				concurrent.Atomic(&m, func() {
+				concurrent.Synchronized(&m, func() {
 					x++
 				})
 			}()

@@ -36,6 +36,10 @@ A bean definition is essentially a recipe for creating one or more objects. The 
 		return optional.OfCommaErr(pgxpool.New(context.Background(), url)).OrElsePanic("Unable to create connection pool")
 	}).PreDestroy((*pgxpool.Pool).Close).Register()
 
+	ioc.Bean[*redis.Client]().Factory(func() *redis.Client {
+		return redis.NewClient(env.ConfigurationProperties("someComponent.redis", env.ConfigurationProperties("default.redis", &redis.Options{})))
+	}).PreDestroy(func(c *redis.Client) { c.Close() }).Register()
+
 > Dedicate a file a.k.a. _context_ or _configuration_ for bean definitions inside package `init` method. One can reuse configured and ready-to-go services in different parts of application by for importing package where needed and injecting beans.
 
 Actual instantiation is lazy and happens (once for default, singleton scope) when calling the provider method

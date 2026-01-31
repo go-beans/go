@@ -29,19 +29,14 @@ This metadata translates to a set of properties that make up each bean definitio
 
 A bean definition is essentially a recipe for creating one or more objects. The container looks at the recipe for a named bean when asked and uses the configuration metadata encapsulated by that bean definition to create (or acquire) an actual object. `type` can be pointer to a struct `*MyService` or interface `MyInterface`. `*MyService` implements (can be assigned to) `MyInterface` if methods have a pointer receiver. You can provide `factory` as a reference to `func NewMyService() *MyService` or inline implementation like
 
-	ioc.Bean[*http.Client]().Factory(func() *http.Client {
-		return &http.Client{
-			Timeout: 60 * time.Second,
-			Transport: &http.Transport{
-				MaxIdleConns:          100,
-				IdleConnTimeout:       90 * time.Second,
-				TLSHandshakeTimeout:   10 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-			},
-		}
-	}).Register()
+	ioc.Bean[*cron.Cron]().Factory(func() *cron.Cron { return cron.New() }).PostConstruct((*cron.Cron).Start).PreDestroy(func(c *cron.Cron) { <-c.Stop().Done() }).Register()
 
-> Dedicate a file a.k.a. _context_ or _configuration_ for beans definitions inside package `init` method. This can be a file in a root package with the same name as a package name for services implemented and grouped by this package. One can reuse configured and ready-to-go services in different parts of application by for importing package where needed and injecting beans.
+	ioc.Bean[*pgxpool.Pool]().Factory(func() *pgxpool.Pool {
+		url := env.Value[string]("postgres://${user}:${password}@${addr}/${database}")
+		return optional.OfCommaErr(pgxpool.New(context.Background(), url)).OrElsePanic("Unable to create connection pool")
+	}).PreDestroy((*pgxpool.Pool).Close).Register()
+
+> Dedicate a file a.k.a. _context_ or _configuration_ for bean definitions inside package `init` method. One can reuse configured and ready-to-go services in different parts of application by for importing package where needed and injecting beans.
 
 Actual instantiation is lazy and happens (once for default, singleton scope) when calling the provider method
 
@@ -49,7 +44,7 @@ Actual instantiation is lazy and happens (once for default, singleton scope) whe
 	httpClient = ioc.Inject[*http.Client]()
 	...
  	// somewhere inside method logic
-	s.httpClient().Get("http://example.com") // here
+	s.httpClient().Get("http://example.com") // lazy instantiation
 
 main.go may look like the following:  
 
@@ -60,24 +55,11 @@ main.go may look like the following:
 	var maintenanceJob = ioc.Inject[*MaintenanceJob]()
 
 	func main() {
-	    defer ioc.ApplicationContextInstance().Close()
+	    defer ioc.Close()
+
 	    maintenanceJob().Run()
-	}
 
-or
-
-	package main
-
-	import (...)
-
-	var shutdown = ioc.ShutdownWaitGroup()
-	var httpServer = ioc.Inject[*HttpServer]()
-	var maintenanceJob = ioc.Inject[*MaintenanceJob]()
-
-	func main() {
-	    httpServer().Start()
-	    maintenanceJob().Schedule()
-	    shutdown.Wait()
+	    // ioc.AwaitTermination()
 	}
 
 ## Dependencies

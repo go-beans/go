@@ -1,10 +1,15 @@
 package ioc
 
 import (
+	"fmt"
+	"log/slog"
+	"os"
 	"reflect"
+	"runtime/debug"
 	"sync"
 
 	"github.com/go-external-config/go/lang"
+	"github.com/go-external-config/go/util/err"
 )
 
 type InjectQualifier[T any] struct {
@@ -27,7 +32,12 @@ func (i *InjectQualifier[T]) resolve() func() T {
 	var instance T
 	return func() T {
 		once.Do(func() {
-			raw := ApplicationContextInstance().Bean(&InjectQualifier[any]{
+			defer err.Recover(func(err any) {
+				slog.Error(fmt.Sprintf("%v\n%s", err, debug.Stack()))
+				Close()
+				os.Exit(1)
+			})
+			raw := applicationContextInstance().Bean(&InjectQualifier[any]{
 				t:    i.t,
 				name: i.name,
 			})

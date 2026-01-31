@@ -6,12 +6,18 @@ import (
 	"os"
 	"reflect"
 	"runtime/debug"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/go-beans/go/concurrent"
 	"github.com/go-external-config/go/env"
 	"github.com/go-external-config/go/lang"
+	"github.com/go-external-config/go/util/concurrent"
+	"github.com/go-external-config/go/util/err"
 )
+
+var applicationContext atomic.Pointer[ApplicationContext]
+var applicationContextMu sync.Mutex
 
 type ApplicationContext struct {
 	ctx                map[reflect.Type][]BeanDefinition
@@ -19,6 +25,17 @@ type ApplicationContext struct {
 	preDestroyEligible []BeanDefinition
 	startTime          time.Time
 	servicesCount      int32
+}
+
+func applicationContextInstance() *ApplicationContext {
+	if applicationContext.Load() == nil {
+		concurrent.Synchronized(&applicationContextMu, func() {
+			if applicationContext.Load() == nil {
+				applicationContext.Store(newApplicationContext())
+			}
+		})
+	}
+	return applicationContext.Load()
 }
 
 func newApplicationContext() *ApplicationContext {
@@ -81,13 +98,11 @@ func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 }
 
 func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
-	defer func() {
-		if err := recover(); err != nil {
-			slog.Error(fmt.Sprintf("Could not initialize bean %v\n%v\n%s", bean, err, debug.Stack()))
-			c.Close()
-			os.Exit(1)
-		}
-	}()
+	defer err.Recover(func(err any) {
+		slog.Error(fmt.Sprintf("Could not initialize bean %v\n%v\n%s", bean, err, debug.Stack()))
+		c.Close()
+		os.Exit(1)
+	})
 	if bean.getScope() == Singleton {
 		if bean.getInstance() == nil {
 			concurrent.Synchronized(bean.getMutex(), func() {
@@ -136,12 +151,15 @@ func (c *ApplicationContext) eligible(registered, requested reflect.Type) bool {
 }
 
 func (c *ApplicationContext) Close() {
-	applicationContext = nil
-	startTheshold := time.Now()
-	slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d running services", c.servicesCount))
-	for i := len(c.preDestroyEligible) - 1; i >= 0; i-- {
-		slog.Debug(fmt.Sprintf("ioc.ApplicationContext: destroying %v", c.preDestroyEligible[i]))
-		c.preDestroyEligible[i].preDestroy()
-	}
-	slog.Info(fmt.Sprintf("ioc.ApplicationContext: context closed in %v, uptime %v", time.Since(startTheshold), time.Since(c.startTime)))
+	concurrent.Synchronized(&applicationContextMu, func() {
+		if applicationContext.CompareAndSwap(c, nil) {
+			startTheshold := time.Now()
+			slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d running services", c.servicesCount))
+			for i := len(c.preDestroyEligible) - 1; i >= 0; i-- {
+				slog.Debug(fmt.Sprintf("ioc.ApplicationContext: destroying %v", c.preDestroyEligible[i]))
+				c.preDestroyEligible[i].preDestroy()
+			}
+			slog.Info(fmt.Sprintf("ioc.ApplicationContext: context closed in %v, uptime %v", time.Since(startTheshold), time.Since(c.startTime)))
+		}
+	})
 }

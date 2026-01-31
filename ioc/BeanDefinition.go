@@ -106,7 +106,7 @@ func (b *BeanDefinitionImpl[T]) PreDestroy(f func(T)) *BeanDefinitionImpl[T] {
 // Register the bean within the context
 func (b *BeanDefinitionImpl[T]) Register() {
 	lang.AssertState(b.factoryMethod != nil, "Bean factory method must be provided")
-	ApplicationContextInstance().Register(b)
+	applicationContextInstance().Register(b)
 }
 
 // Implements BeanDefinition

@@ -16,10 +16,10 @@ import (
 func TestMain(m *testing.M) {
 	fmt.Println("Before all")
 	env.SetActiveProfiles("test")
-	
+
 	ioc.Bean[*Counter]().Name("singletonCounter", "counter").Factory(NewCounter).Register()
 	ioc.Bean[*Counter]().Scope("prototype").Name("prototypeCounter").Factory(NewCounter).Register()
-	
+
 	ioc.Bean[*CalculatorImpl]().Primary().Profile("test").Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).PreDestroy((*CalculatorImpl).PreDestroy).Register()
 	ioc.Bean[*CalculatorImpl]().Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).Register()
 	ioc.Bean[*AddOperation]().Name("addOperation").Factory(NewAddOperation).Register()
@@ -36,7 +36,7 @@ func TestMain(m *testing.M) {
 		mockCalculator.On("LastOperation").Return("TBD")
 		return mockCalculator
 	}).Register()
-	
+
 	ioc.Bean[*map[string]string]().Name("preinitializedMap").Factory(func() *map[string]string {
 		m := make(map[string]string)
 		m["key"] = "value"
@@ -68,14 +68,19 @@ func Test_Ioc(t *testing.T) {
 
 		singletonCounter1 := ioc.Inject[*Counter]("singletonCounter")
 		singletonCounter2 := ioc.Inject[*Counter]("singletonCounter")
-		prototypeCounter1 := ioc.Inject[*Counter]("prototypeCounter")
-		prototypeCounter2 := ioc.Inject[*Counter]("prototypeCounter")
+		require.Equal(t, 0, singletonCounter1().count)
+		require.Equal(t, 0, singletonCounter2().count)
 		singletonCounter1().count++
 		singletonCounter2().count++
-		prototypeCounter1().count++
-		prototypeCounter2().count++
 		require.Equal(t, 2, singletonCounter1().count)
 		require.Equal(t, 2, singletonCounter2().count)
+
+		prototypeCounter1 := ioc.Inject[*Counter]("prototypeCounter")
+		prototypeCounter2 := ioc.Inject[*Counter]("prototypeCounter")
+		require.Equal(t, 0, prototypeCounter1().count)
+		require.Equal(t, 0, prototypeCounter2().count)
+		prototypeCounter1().count++
+		prototypeCounter2().count++
 		require.Equal(t, 1, prototypeCounter1().count)
 		require.Equal(t, 1, prototypeCounter2().count)
 

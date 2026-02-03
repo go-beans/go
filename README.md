@@ -56,9 +56,7 @@ main.go may look like the following:
 
 	func main() {
 	    defer ioc.Close()
-
 	    maintenanceJob().Run()
-
 	    // ioc.AwaitTermination()
 	}
 
@@ -91,13 +89,13 @@ To put it another way, when you define a bean definition and it is scoped as a s
 
 ### The Prototype Scope
 
-The non-singleton prototype scope of bean deployment results in the creation of a new bean instance every time a request for that specific bean is made. That is, the bean is injected into another bean or you request it through an `ioc.Inject()` method call on the container. You may want to use the prototype scope for some stateful beans but note that `PreDestroy(method)` is called for `singleton` beans only if `ioc.GracefulShutdown()` is configured.
+The non-singleton prototype scope of bean deployment results in the creation of a new bean instance every time a request for that specific bean is made. That is, the bean is injected into another bean or you request it through an `ioc.Inject()` method call on the container. You may want to use the prototype scope for some stateful beans but note that `PreDestroy(method)` is called for `singleton` beans only for `ioc.Close()`.
 
 ### Lifecycle Callbacks
 
 The container calls `PostConstruct(method)` after bean instantiation and lets a bean perform initialization work after the container has set all necessary properties on the bean. `PreDestroy(method)` lets a bean get a callback when the container that contains it is destroyed before graceful shutdown. 
 
-> Be aware that @PostConstruct and initialization methods in general are executed within the container’s singleton creation lock. The bean instance is only considered as fully initialized and ready to be published to others after returning from the @PostConstruct method. Such individual initialization methods are only meant for validating the configuration state and possibly preparing some data structures based on the given configuration but no further activity with external bean access. Otherwise there is a risk for an initialization deadlock.
+> Be aware that `PostConstruct` and initialization methods in general are executed within the container’s singleton creation lock. The bean instance is only considered as fully initialized and ready to be published to others after returning from the `PostConstruct` method. Such individual initialization methods are only meant for validating the configuration state and possibly preparing some data structures based on the given configuration but no further activity with external bean access.
 
 ## Environment Abstraction
 

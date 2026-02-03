@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/go-external-config/go/lang"
+	"github.com/go-external-config/go/util/err"
 )
 
 type Scope int
@@ -147,11 +148,9 @@ func (b *BeanDefinitionImpl[T]) preDestroyEligible() bool {
 }
 
 func (b *BeanDefinitionImpl[T]) preDestroy() {
-	defer func() {
-		if err := recover(); err != nil {
-			slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", b, err, debug.Stack()))
-		}
-	}()
+	defer err.Recover(func(err any) {
+		slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", b, err, debug.Stack()))
+	})
 	if b.instance != nil {
 		b.preDestroyMethod(b.instance.(T))
 	}

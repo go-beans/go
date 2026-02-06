@@ -1,6 +1,7 @@
 package ioc
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -20,7 +21,9 @@ var applicationContext atomic.Pointer[ApplicationContext]
 var applicationContextMu sync.Mutex
 
 type ApplicationContext struct {
-	ctx                map[reflect.Type][]BeanDefinition
+	context            context.Context
+	cancel             context.CancelFunc
+	beans              map[reflect.Type][]BeanDefinition
 	named              map[string]BeanDefinition
 	preDestroyEligible []BeanDefinition
 	startTime          time.Time
@@ -40,8 +43,11 @@ func applicationContextInstance() *ApplicationContext {
 
 func newApplicationContext() *ApplicationContext {
 	slog.Info(fmt.Sprintf("ioc.ApplicationContext: starting with PID %d", os.Getpid()))
+	context, cancel := context.WithCancel(context.Background())
 	return &ApplicationContext{
-		ctx:                make(map[reflect.Type][]BeanDefinition),
+		context:            context,
+		cancel:             cancel,
+		beans:              make(map[reflect.Type][]BeanDefinition),
 		named:              make(map[string]BeanDefinition),
 		preDestroyEligible: make([]BeanDefinition, 0),
 		startTime:          time.Now(),
@@ -59,7 +65,7 @@ func (c *ApplicationContext) Register(bean BeanDefinition) {
 				c.named[name] = bean
 			}
 		}
-		c.ctx[bean.getType()] = append(c.ctx[bean.getType()], bean)
+		c.beans[bean.getType()] = append(c.beans[bean.getType()], bean)
 	}
 }
 
@@ -73,7 +79,7 @@ func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 		var candidates []BeanDefinition
 		var primaryCandidates []BeanDefinition
 
-		for t, beans := range c.ctx {
+		for t, beans := range c.beans {
 			if c.eligible(t, inject.t) {
 				candidates = append(candidates, beans...)
 				for _, bean := range beans {
@@ -155,6 +161,7 @@ func (c *ApplicationContext) Close() {
 		if applicationContext.CompareAndSwap(c, nil) {
 			startTheshold := time.Now()
 			slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d running services", c.servicesCount))
+			c.cancel()
 			for i := len(c.preDestroyEligible) - 1; i >= 0; i-- {
 				slog.Debug(fmt.Sprintf("ioc.ApplicationContext: destroying %v", c.preDestroyEligible[i]))
 				c.preDestroyEligible[i].preDestroy()

@@ -1,6 +1,7 @@
 package ioc
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,6 +23,24 @@ func Bean[T any]() *BeanDefinitionImpl[T] {
 	return newBeanDefinition[T]()
 }
 
+// The returned context's Done channel is closed when AppcilationContext instance is closed and before beans destruction
+//
+//	for {
+//		select {
+//		case <-reqContext.Done():
+//		case <-ioc.Context().Done():
+//			return
+//		case msg := <-ch:
+//			fmt.Println(msg)
+//		}
+//	}
+func Context() context.Context {
+	return applicationContextInstance().context
+}
+
+// To be used in main to defer resources cleanup
+//
+//	defer ioc.Close()
 func Close() {
 	applicationContextInstance().Close()
 }

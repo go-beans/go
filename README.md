@@ -32,7 +32,7 @@ A bean definition is essentially a recipe for creating one or more objects. The 
 	ioc.Bean[*cron.Cron]().Factory(func() *cron.Cron { return cron.New() }).PostConstruct((*cron.Cron).Start).PreDestroy(func(c *cron.Cron) { <-c.Stop().Done() }).Register()
 
 	ioc.Bean[*pgxpool.Pool]().Factory(func() *pgxpool.Pool {
-		url := env.Value[string]("postgres://${user}:${password}@${addr}/${database}")
+		url := env.Value[string]("postgres://${db.user}:${db.password}@${db.addr}/${db.database}")
 		return optional.OfCommaErr(pgxpool.New(context.Background(), url)).OrElsePanic("Unable to create connection pool")
 	}).PreDestroy((*pgxpool.Pool).Close).Register()
 

@@ -27,41 +27,26 @@ This metadata translates to a set of properties that make up each bean definitio
 
 ## Instantiating Beans
 
-A bean definition is essentially a recipe for creating one or more objects. The container looks at the recipe for a named bean when asked and uses the configuration metadata encapsulated by that bean definition to create (or acquire) an actual object. `type` can be pointer to a struct `*MyService` or interface `MyInterface`. `*MyService` implements (can be assigned to) `MyInterface` if methods have a pointer receiver. You can provide `factory` as a reference to `func NewMyService() *MyService` or inline implementation like
+A bean definition is essentially a recipe for creating one or more objects. The container looks at the recipe for a named bean when asked and uses the configuration metadata encapsulated by that bean definition to create (or acquire) an actual object. `type` can be pointer to a struct `*MyService` or interface `MyInterface`. `*MyService` implements (can be assigned to) `MyInterface` if methods have a pointer receiver. You can provide `factory` as a reference to `func NewMyService() *MyService` or inline implementation.
 
-	ioc.Bean[*cron.Cron]().Factory(func() *cron.Cron { return cron.New() }).PostConstruct((*cron.Cron).Start).PreDestroy(func(c *cron.Cron) { <-c.Stop().Done() }).Register()
+Dedicate a file a.k.a. _context_ or _configuration_ for bean definitions inside package `init` method. One can reuse configured and ready-to-go services in different parts of application by for importing package where needed and injecting beans.
 
-	ioc.Bean[*pgxpool.Pool]().Factory(func() *pgxpool.Pool {
-		url := env.Value[string]("postgres://${db.user}:${db.password}@${db.addr}/${db.database}")
-		return optional.OfCommaErr(pgxpool.New(context.Background(), url)).OrElsePanic("Unable to create connection pool")
-	}).PreDestroy((*pgxpool.Pool).Close).Register()
+project/internal/package/context/context.go:  
 
-	ioc.Bean[*redis.Client]().Factory(func() *redis.Client {
-		return redis.NewClient(env.ConfigurationProperties("someComponent.redis", env.ConfigurationProperties("default.redis", &redis.Options{})))
-	}).PreDestroy(func(c *redis.Client) { c.Close() }).Register()
+	func init() {
+		ioc.Bean[*package.MyService]().Factory(package.NewMyService).Register()
+		ioc.Bean[*cron.Cron]().Factory(func() *cron.Cron { return cron.New() }).
+			PostConstruct((*cron.Cron).Start).
+			PreDestroy(func(c *cron.Cron) { <-c.Stop().Done() }).Register()
 
-> Dedicate a file a.k.a. _context_ or _configuration_ for bean definitions inside package `init` method. One can reuse configured and ready-to-go services in different parts of application by for importing package where needed and injecting beans.
+		ioc.Bean[*pgxpool.Pool]().Factory(func() *pgxpool.Pool {
+			url := env.Value[string]("postgres://${db.user}:${db.password}@${db.addr}/${db.database}")
+			return optional.OfCommaErr(pgxpool.New(context.Background(), url)).OrElsePanic("Unable to create connection pool")
+		}).PreDestroy((*pgxpool.Pool).Close).Register()
 
-Actual instantiation is lazy and happens (once for default, singleton scope) when calling the provider method
-
-	// somewhere inside factory method
-	httpClient = ioc.Inject[*http.Client]()
-	...
- 	// somewhere inside method logic
-	s.httpClient().Get("http://example.com") // lazy instantiation
-
-main.go may look like the following:  
-
-	package main
-
-	import (...)
-
-	var maintenanceJob = ioc.Inject[*MaintenanceJob]()
-
-	func main() {
-	    defer ioc.Close()
-	    maintenanceJob().Run()
-	    // ioc.AwaitTermination()
+		ioc.Bean[*redis.Client]().Factory(func() *redis.Client {
+			return redis.NewClient(env.ConfigurationProperties("someComponent.redis", env.ConfigurationProperties("default.redis", &redis.Options{})))
+		}).PreDestroy(func(c *redis.Client) { c.Close() }).Register()
 	}
 
 ## Dependencies
@@ -73,6 +58,43 @@ A typical enterprise application does not consist of a single object (or bean). 
 Dependency injection (DI) is a process whereby objects define their dependencies (that is, the other objects with which they work) only through arguments to a factory method, or properties that are set on the object instance after it is constructed or returned from a factory method. The container then injects those dependencies when it creates the bean. This process is fundamentally the inverse (hence the name, Inversion of Control) of the bean itself controlling the instantiation or location of its dependencies on its own by using direct construction of objects.
 
 Code is cleaner with the DI principle, and decoupling is more effective when objects are provided with their dependencies. The object does not look up its dependencies and does not know the location or type of the dependencies. As a result, your service become easier to test, particularly when the dependencies are on interfaces, which allow for stub or mock implementations to be used in unit tests.
+
+project/internal/package/MyService.go:  
+
+	type MyService struct {
+		httpClient  func() *http.Client
+		redisClient func() *redis.Client
+		cron        func() *cron.Cron
+	}
+
+	func NewMyService() *MyService {
+		return &MyService{
+			httpClient:  ioc.Inject[*http.Client](),
+			redisClient: ioc.Inject[*redis.Client](),
+			cron:        ioc.Inject[*cron.Cron](),
+		}
+	}
+
+	func (s *MyService) DoSomething() {
+		s.httpClient().Get("http://example.com")
+	}
+
+> Each service knows and cares only about it's own dependencies when `Service A` uses `Service B` uses `Service C`.
+Actual instantiation is lazy and happens (once for default, singleton scope) when calling the provider method.  
+
+project/cmd/package/main.go:
+
+	package main
+
+	import _ "project/internal/package/context"
+
+	var myService = ioc.Inject[*package.MyService]()
+
+	func main() {
+	    defer ioc.Close()
+	    myService().DoSomething()
+	    // ioc.AwaitTermination()
+	}
 
 ### Bean Scopes
 

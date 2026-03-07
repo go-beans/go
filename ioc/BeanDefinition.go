@@ -30,7 +30,6 @@ type BeanDefinition interface {
 	getProfiles() []string
 	instantiate() any
 	getInstance() any
-	postConstruct()
 	preDestroyEligible() bool
 	preDestroy()
 	getMutex() *sync.Mutex
@@ -167,15 +166,12 @@ func (this *BeanDefinitionImpl[T]) getProfiles() []string {
 }
 
 func (this *BeanDefinitionImpl[T]) instantiate() any {
-	this.instance = this.factoryMethod()
-	this.postConstruct()
-	return this.instance
-}
-
-func (this *BeanDefinitionImpl[T]) postConstruct() {
+	instance := this.factoryMethod()
+	this.instance = instance
 	if this.postConstructMethod != nil {
-		this.postConstructMethod(this.instance.(T))
+		this.postConstructMethod(instance)
 	}
+	return instance
 }
 
 func (this *BeanDefinitionImpl[T]) preDestroyEligible() bool {

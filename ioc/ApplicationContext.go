@@ -97,7 +97,7 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 	}
 }
 
-func (this *ApplicationContext) beanInstance(bean BeanDefinition) (instance any) {
+func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	defer err.Recover(func(err any) {
 		slog.Error(fmt.Sprintf("Could not initialize bean %v\n%v\n%s", bean, err, debug.Stack()))
 		this.Close()
@@ -116,14 +116,10 @@ func (this *ApplicationContext) beanInstance(bean BeanDefinition) (instance any)
 					bean.instantiate()
 				}
 			})
-			return bean.getInstance()
 		}
 		return bean.getInstance()
 	}
-	concurrent.Synchronized(bean.getMutex(), func() {
-		instance = bean.instantiate()
-	})
-	return instance
+	return bean.instantiate()
 }
 
 func (this *ApplicationContext) eligible(registered, requested reflect.Type) bool {

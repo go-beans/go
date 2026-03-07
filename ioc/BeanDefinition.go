@@ -24,6 +24,8 @@ type BeanDefinition interface {
 	getType() reflect.Type
 	getNames() []string
 	isPrimary() bool
+	isLazy() bool
+	getDependsOn() []string
 	getScope() Scope
 	getProfiles() []string
 	instantiate() any
@@ -40,6 +42,8 @@ type BeanDefinitionImpl[T any] struct {
 	names               []string
 	scope               Scope
 	primary             bool
+	lazy                bool
+	dependsOn           []string
 	profiles            []string
 	factoryMethod       func() T
 	postConstructMethod func(T)
@@ -50,7 +54,10 @@ type BeanDefinitionImpl[T any] struct {
 
 func newBeanDefinition[T any]() *BeanDefinitionImpl[T] {
 	return &BeanDefinitionImpl[T]{
-		t: lang.TypeOf[T](),
+		t:         lang.TypeOf[T](),
+		names:     make([]string, 0),
+		dependsOn: make([]string, 0),
+		profiles:  make([]string, 0),
 	}
 }
 
@@ -69,36 +76,56 @@ func (this *BeanDefinitionImpl[T]) Scope(scope string) *BeanDefinitionImpl[T] {
 
 // Set optional name(s)
 func (this *BeanDefinitionImpl[T]) Name(names ...string) *BeanDefinitionImpl[T] {
+	lang.AssertState(len(this.names) == 0, "Name is defined twice")
 	this.names = names
 	return this
 }
 
 // Mark this bean as primary
 func (this *BeanDefinitionImpl[T]) Primary() *BeanDefinitionImpl[T] {
+	lang.AssertState(!this.primary, "Primary is defined twice")
 	this.primary = true
+	return this
+}
+
+// Mark this bean as lazy
+func (this *BeanDefinitionImpl[T]) Lazy() *BeanDefinitionImpl[T] {
+	lang.AssertState(!this.lazy, "Lazy is defined twice")
+	this.lazy = true
+	return this
+}
+
+// Depends on beans.
+func (this *BeanDefinitionImpl[T]) DependsOn(beans ...string) *BeanDefinitionImpl[T] {
+	lang.AssertState(len(this.dependsOn) == 0, "DependsOn is defined twice")
+	this.dependsOn = beans
 	return this
 }
 
 // Profile binding
 func (this *BeanDefinitionImpl[T]) Profile(profileExpr ...string) *BeanDefinitionImpl[T] {
+	lang.AssertState(len(this.profiles) == 0, "Profile is defined twice")
 	this.profiles = profileExpr
 	return this
 }
 
 // Set the factory method reference or anonymous function with actual implementation
 func (this *BeanDefinitionImpl[T]) Factory(f func() T) *BeanDefinitionImpl[T] {
+	lang.AssertState(this.factoryMethod == nil, "Factory is defined twice")
 	this.factoryMethod = f
 	return this
 }
 
 // It is safe to use injected beans at this point
 func (this *BeanDefinitionImpl[T]) PostConstruct(f func(T)) *BeanDefinitionImpl[T] {
+	lang.AssertState(this.postConstructMethod == nil, "PostConstruct is defined twice")
 	this.postConstructMethod = f
 	return this
 }
 
 // Clean-up resources before shutdown. Not called on prototype beans.
 func (this *BeanDefinitionImpl[T]) PreDestroy(f func(T)) *BeanDefinitionImpl[T] {
+	lang.AssertState(this.preDestroyMethod == nil, "PreDestroy is defined twice")
 	lang.AssertState(this.scope != Prototype, "PreDestroy cannot be used for Prototype scope beans")
 	this.preDestroyMethod = f
 	return this
@@ -121,6 +148,14 @@ func (this *BeanDefinitionImpl[T]) getNames() []string {
 
 func (this *BeanDefinitionImpl[T]) isPrimary() bool {
 	return this.primary
+}
+
+func (this *BeanDefinitionImpl[T]) isLazy() bool {
+	return this.lazy
+}
+
+func (this *BeanDefinitionImpl[T]) getDependsOn() []string {
+	return this.dependsOn
 }
 
 func (this *BeanDefinitionImpl[T]) getScope() Scope {

@@ -28,6 +28,7 @@ func Bean[T any]() *BeanDefinitionImpl[T] {
 //	for {
 //		select {
 //		case <-reqContext.Done():
+//			return
 //		case <-ioc.Context().Done():
 //			return
 //		case msg := <-ch:
@@ -36,6 +37,11 @@ func Bean[T any]() *BeanDefinitionImpl[T] {
 //	}
 func Context() context.Context {
 	return applicationContextInstance().context
+}
+
+// Refresh application context: instantiate and initialize all non-lazy singeton beans. Omit if you want beans to be `lazy` by default
+func Refresh() {
+	applicationContextInstance().Refresh()
 }
 
 // To be used in main to defer resources cleanup

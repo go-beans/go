@@ -70,11 +70,10 @@ func (this *ApplicationContext) Register(bean BeanDefinition) {
 }
 
 func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
-	var instance any
 	if len(inject.name) > 0 {
 		bean, ok := this.named[inject.name]
-		lang.AssertState(ok, "No bean with name '%s' found", inject.name)
-		instance = this.beanInstance(bean)
+		lang.AssertState(ok, "No bean named '%s' found", inject.name)
+		return this.beanInstance(bean)
 	} else {
 		var candidates []BeanDefinition
 		var primaryCandidates []BeanDefinition
@@ -92,15 +91,13 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 
 		lang.AssertState(len(primaryCandidates) <= 1, "Multiple primary beans of type %v found. Use name qualifier.\n%v", inject.t, primaryCandidates)
 		if len(primaryCandidates) == 1 {
-			instance = this.beanInstance(primaryCandidates[0])
+			return this.beanInstance(primaryCandidates[0])
 		} else {
 			lang.AssertState(len(candidates) > 0, "No bean of type %v found", inject.t)
 			lang.AssertState(len(candidates) <= 1, "Multiple beans of type %v found. Use name qualifier or mark one of the beans primary.\n%v", inject.t, candidates)
-			instance = this.beanInstance(candidates[0])
+			return this.beanInstance(candidates[0])
 		}
 	}
-
-	return instance
 }
 
 func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
@@ -109,6 +106,11 @@ func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 		this.Close()
 		os.Exit(1)
 	})
+	for _, name := range bean.getDependsOn() {
+		bean, ok := this.named[name]
+		lang.AssertState(ok, "No dependency bean named '%s' found", name)
+		this.beanInstance(bean)
+	}
 	if bean.getScope() == Singleton {
 		if bean.getInstance() == nil {
 			concurrent.Synchronized(bean.getMutex(), func() {
@@ -154,6 +156,16 @@ func (this *ApplicationContext) eligible(registered, requested reflect.Type) boo
 	}
 
 	return false
+}
+
+func (this *ApplicationContext) Refresh() {
+	for _, beans := range this.beans {
+		for _, bean := range beans {
+			if bean.getScope() == Singleton && !bean.isLazy() {
+				this.beanInstance(bean)
+			}
+		}
+	}
 }
 
 func (this *ApplicationContext) Close() {

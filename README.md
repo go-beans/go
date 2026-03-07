@@ -16,7 +16,7 @@ The `ApplicationContext` is the service for an advanced factory capable of maint
 
 An IoC container manages one or more beans. These beans are registered using the form that you supply to the container.
 
-    ioc.Bean[type]().Name("name").Scope("scope").Profile("expression").PostConstruct(method).PreDestroy(method).Factory(method).Register()
+    ioc.Bean[type]().Scope("scope").Name("name").Profile("expression").Primary().Lazy().DependsOn("name").Factory(method).PostConstruct(method).PreDestroy(method).Register()
 
 Within the container itself, these bean definitions are represented as `BeanDefinition` objects, which contain (among other information) the following metadata:
 
@@ -33,21 +33,21 @@ Dedicate a file a.k.a. _context_ or _configuration_ for bean definitions inside 
 
 project/internal/package/context/context.go:  
 
-	func init() {
-		ioc.Bean[*package.MyService]().Factory(package.NewMyService).Register()
-		ioc.Bean[*cron.Cron]().Factory(func() *cron.Cron { return cron.New() }).
-			PostConstruct((*cron.Cron).Start).
-			PreDestroy(func(c *cron.Cron) { <-c.Stop().Done() }).Register()
+    func init() {
+      ioc.Bean[*package.MyService]().Factory(package.NewMyService).Register()
+      ioc.Bean[*cron.Cron]().Factory(func() *cron.Cron { return cron.New() }).
+        PostConstruct((*cron.Cron).Start).
+        PreDestroy(func(c *cron.Cron) { <-c.Stop().Done() }).Register()
 
-		ioc.Bean[*pgxpool.Pool]().Factory(func() *pgxpool.Pool {
-			url := env.Value[string]("postgres://${db.user}:${db.password}@${db.addr}/${db.database}")
-			return optional.OfCommaErr(pgxpool.New(context.Background(), url)).OrElsePanic("Unable to create connection pool")
-		}).PreDestroy((*pgxpool.Pool).Close).Register()
+      ioc.Bean[*pgxpool.Pool]().Factory(func() *pgxpool.Pool {
+        url := env.Value[string]("postgres://${db.user}:${db.password}@${db.addr}/${db.database}")
+        return optional.OfCommaErr(pgxpool.New(context.Background(), url)).OrElsePanic("Unable to create connection pool")
+      }).PreDestroy((*pgxpool.Pool).Close).Register()
 
-		ioc.Bean[*redis.Client]().Factory(func() *redis.Client {
-			return redis.NewClient(env.ConfigurationProperties("someComponent.redis", env.ConfigurationProperties("default.redis", &redis.Options{})))
-		}).PreDestroy(func(c *redis.Client) { c.Close() }).Register()
-	}
+      ioc.Bean[*redis.Client]().Factory(func() *redis.Client {
+        return redis.NewClient(env.ConfigurationProperties("someComponent.redis", env.ConfigurationProperties("default.redis", &redis.Options{})))
+      }).PreDestroy(func(c *redis.Client) { c.Close() }).Register()
+    }
 
 ## Dependencies
 
@@ -61,23 +61,23 @@ Code is cleaner with the DI principle, and decoupling is more effective when obj
 
 project/internal/package/MyService.go:  
 
-	type MyService struct {
-		httpClient  func() *http.Client
-		redisClient func() *redis.Client
-		cron        func() *cron.Cron
-	}
+    type MyService struct {
+      httpClient  func() *http.Client
+      redisClient func() *redis.Client
+      cron        func() *cron.Cron
+    }
 
-	func NewMyService() *MyService {
-		return &MyService{
-			httpClient:  ioc.Inject[*http.Client](),
-			redisClient: ioc.Inject[*redis.Client](),
-			cron:        ioc.Inject[*cron.Cron](),
-		}
-	}
+    func NewMyService() *MyService {
+      return &MyService{
+        httpClient:  ioc.Inject[*http.Client](),
+        redisClient: ioc.Inject[*redis.Client](),
+        cron:        ioc.Inject[*cron.Cron](),
+      }
+    }
 
-	func (s *MyService) DoSomething() {
-		s.httpClient().Get("http://example.com")
-	}
+    func (s *MyService) DoSomething() {
+      s.httpClient().Get("http://example.com")
+    }
 
 > Each service knows and cares only about it's own dependencies when `Service A` uses `Service B` uses `Service C`.
 Actual instantiation is lazy and happens (once for default, singleton scope) when calling the provider method.  
@@ -91,9 +91,12 @@ project/cmd/package/main.go:
 	var myService = ioc.Inject[*package.MyService]()
 
 	func main() {
-	    defer ioc.Close()
-	    myService().DoSomething()
-	    // ioc.AwaitTermination()
+	  defer ioc.Close()
+	  ioc.Refresh()
+
+	  myService().DoSomething()
+
+	  // ioc.AwaitTermination()
 	}
 
 ### Bean Scopes

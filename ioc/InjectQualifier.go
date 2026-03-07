@@ -22,12 +22,12 @@ func newInjectQualifier[T any]() *InjectQualifier[T] {
 		t: lang.TypeOf[T]()}
 }
 
-func (i *InjectQualifier[T]) Name(name string) *InjectQualifier[T] {
-	i.name = name
-	return i
+func (this *InjectQualifier[T]) Name(name string) *InjectQualifier[T] {
+	this.name = name
+	return this
 }
 
-func (i *InjectQualifier[T]) resolve() func() T {
+func (this *InjectQualifier[T]) resolve() func() T {
 	var once sync.Once
 	var instance T
 	return func() T {
@@ -38,11 +38,11 @@ func (i *InjectQualifier[T]) resolve() func() T {
 				os.Exit(1)
 			})
 			raw := applicationContextInstance().Bean(&InjectQualifier[any]{
-				t:    i.t,
-				name: i.name,
+				t:    this.t,
+				name: this.name,
 			})
 			val, ok := raw.(T)
-			lang.AssertState(ok, "Cannot cast bean to expected type %v; got %T", i.t, raw)
+			lang.AssertState(ok, "Cannot cast bean to expected type %v; got %T", this.t, raw)
 			instance = val
 		})
 		return instance

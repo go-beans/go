@@ -55,32 +55,32 @@ func newApplicationContext() *ApplicationContext {
 	}
 }
 
-func (c *ApplicationContext) Register(bean BeanDefinition) {
+func (this *ApplicationContext) Register(bean BeanDefinition) {
 	if env.MatchesProfiles(bean.getProfiles()...) {
 		slog.Debug(fmt.Sprintf("ioc.ApplicationContext: registering %s", bean))
 		if len(bean.getNames()) > 0 {
 			for _, name := range bean.getNames() {
-				_, ok := c.named[name]
+				_, ok := this.named[name]
 				lang.AssertState(!ok, "Bean with name '%s' already registered", name)
-				c.named[name] = bean
+				this.named[name] = bean
 			}
 		}
-		c.beans[bean.getType()] = append(c.beans[bean.getType()], bean)
+		this.beans[bean.getType()] = append(this.beans[bean.getType()], bean)
 	}
 }
 
-func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
+func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 	var instance any
 	if len(inject.name) > 0 {
-		bean, ok := c.named[inject.name]
+		bean, ok := this.named[inject.name]
 		lang.AssertState(ok, "No bean with name '%s' found", inject.name)
-		instance = c.beanInstance(bean)
+		instance = this.beanInstance(bean)
 	} else {
 		var candidates []BeanDefinition
 		var primaryCandidates []BeanDefinition
 
-		for t, beans := range c.beans {
-			if c.eligible(t, inject.t) {
+		for t, beans := range this.beans {
+			if this.eligible(t, inject.t) {
 				candidates = append(candidates, beans...)
 				for _, bean := range beans {
 					if bean.isPrimary() {
@@ -92,21 +92,21 @@ func (c *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 
 		lang.AssertState(len(primaryCandidates) <= 1, "Multiple primary beans of type %v found. Use name qualifier.\n%v", inject.t, primaryCandidates)
 		if len(primaryCandidates) == 1 {
-			instance = c.beanInstance(primaryCandidates[0])
+			instance = this.beanInstance(primaryCandidates[0])
 		} else {
 			lang.AssertState(len(candidates) > 0, "No bean of type %v found", inject.t)
 			lang.AssertState(len(candidates) <= 1, "Multiple beans of type %v found. Use name qualifier or mark one of the beans primary.\n%v", inject.t, candidates)
-			instance = c.beanInstance(candidates[0])
+			instance = this.beanInstance(candidates[0])
 		}
 	}
 
 	return instance
 }
 
-func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
+func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	defer err.Recover(func(err any) {
 		slog.Error(fmt.Sprintf("Could not initialize bean %v\n%v\n%s", bean, err, debug.Stack()))
-		c.Close()
+		this.Close()
 		os.Exit(1)
 	})
 	if bean.getScope() == Singleton {
@@ -114,9 +114,9 @@ func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
 			concurrent.Synchronized(bean.getMutex(), func() {
 				if bean.getInstance() == nil {
 					if bean.preDestroyEligible() {
-						c.preDestroyEligible = append(c.preDestroyEligible, bean)
+						this.preDestroyEligible = append(this.preDestroyEligible, bean)
 					}
-					c.servicesCount++
+					this.servicesCount++
 					bean.instantiate()
 				}
 			})
@@ -127,7 +127,7 @@ func (c *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	return bean.instantiate()
 }
 
-func (c *ApplicationContext) eligible(registered, requested reflect.Type) bool {
+func (this *ApplicationContext) eligible(registered, requested reflect.Type) bool {
 	if registered.AssignableTo(requested) {
 		return true
 	}
@@ -156,17 +156,17 @@ func (c *ApplicationContext) eligible(registered, requested reflect.Type) bool {
 	return false
 }
 
-func (c *ApplicationContext) Close() {
+func (this *ApplicationContext) Close() {
 	concurrent.Synchronized(&applicationContextMu, func() {
-		if applicationContext.CompareAndSwap(c, nil) {
+		if applicationContext.CompareAndSwap(this, nil) {
 			startTheshold := time.Now()
-			slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d running services", c.servicesCount))
-			c.cancel()
-			for i := len(c.preDestroyEligible) - 1; i >= 0; i-- {
-				slog.Debug(fmt.Sprintf("ioc.ApplicationContext: destroying %v", c.preDestroyEligible[i]))
-				c.preDestroyEligible[i].preDestroy()
+			slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d running services", this.servicesCount))
+			this.cancel()
+			for i := len(this.preDestroyEligible) - 1; i >= 0; i-- {
+				slog.Debug(fmt.Sprintf("ioc.ApplicationContext: destroying %v", this.preDestroyEligible[i]))
+				this.preDestroyEligible[i].preDestroy()
 			}
-			slog.Info(fmt.Sprintf("ioc.ApplicationContext: context closed in %v, uptime %v", time.Since(startTheshold), time.Since(c.startTime)))
+			slog.Info(fmt.Sprintf("ioc.ApplicationContext: context closed in %v, uptime %v", time.Since(startTheshold), time.Since(this.startTime)))
 		}
 	})
 }

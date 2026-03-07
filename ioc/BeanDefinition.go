@@ -55,116 +55,116 @@ func newBeanDefinition[T any]() *BeanDefinitionImpl[T] {
 }
 
 // Set optional scope
-func (b *BeanDefinitionImpl[T]) Scope(scope string) *BeanDefinitionImpl[T] {
+func (this *BeanDefinitionImpl[T]) Scope(scope string) *BeanDefinitionImpl[T] {
 	switch scope {
 	case "singleton":
-		b.scope = Singleton
+		this.scope = Singleton
 	case "prototype":
-		b.scope = Prototype
+		this.scope = Prototype
 	default:
 		panic(fmt.Sprintf("%s scope not supported", scope))
 	}
-	return b
+	return this
 }
 
 // Set optional name(s)
-func (b *BeanDefinitionImpl[T]) Name(names ...string) *BeanDefinitionImpl[T] {
-	b.names = names
-	return b
+func (this *BeanDefinitionImpl[T]) Name(names ...string) *BeanDefinitionImpl[T] {
+	this.names = names
+	return this
 }
 
 // Mark this bean as primary
-func (b *BeanDefinitionImpl[T]) Primary() *BeanDefinitionImpl[T] {
-	b.primary = true
-	return b
+func (this *BeanDefinitionImpl[T]) Primary() *BeanDefinitionImpl[T] {
+	this.primary = true
+	return this
 }
 
 // Profile binding
-func (b *BeanDefinitionImpl[T]) Profile(profileExpr ...string) *BeanDefinitionImpl[T] {
-	b.profiles = profileExpr
-	return b
+func (this *BeanDefinitionImpl[T]) Profile(profileExpr ...string) *BeanDefinitionImpl[T] {
+	this.profiles = profileExpr
+	return this
 }
 
 // Set the factory method reference or anonymous function with actual implementation
-func (b *BeanDefinitionImpl[T]) Factory(f func() T) *BeanDefinitionImpl[T] {
-	b.factoryMethod = f
-	return b
+func (this *BeanDefinitionImpl[T]) Factory(f func() T) *BeanDefinitionImpl[T] {
+	this.factoryMethod = f
+	return this
 }
 
 // It is safe to use injected beans at this point
-func (b *BeanDefinitionImpl[T]) PostConstruct(f func(T)) *BeanDefinitionImpl[T] {
-	b.postConstructMethod = f
-	return b
+func (this *BeanDefinitionImpl[T]) PostConstruct(f func(T)) *BeanDefinitionImpl[T] {
+	this.postConstructMethod = f
+	return this
 }
 
 // Clean-up resources before shutdown. Not called on prototype beans.
-func (b *BeanDefinitionImpl[T]) PreDestroy(f func(T)) *BeanDefinitionImpl[T] {
-	lang.AssertState(b.scope != Prototype, "PreDestroy cannot be used for Prototype scope beans")
-	b.preDestroyMethod = f
-	return b
+func (this *BeanDefinitionImpl[T]) PreDestroy(f func(T)) *BeanDefinitionImpl[T] {
+	lang.AssertState(this.scope != Prototype, "PreDestroy cannot be used for Prototype scope beans")
+	this.preDestroyMethod = f
+	return this
 }
 
 // Register the bean within the context
-func (b *BeanDefinitionImpl[T]) Register() {
-	lang.AssertState(b.factoryMethod != nil, "Bean factory method must be provided")
-	applicationContextInstance().Register(b)
+func (this *BeanDefinitionImpl[T]) Register() {
+	lang.AssertState(this.factoryMethod != nil, "Bean factory method must be provided")
+	applicationContextInstance().Register(this)
 }
 
 // Implements BeanDefinition
-func (b *BeanDefinitionImpl[T]) getType() reflect.Type {
-	return b.t
+func (this *BeanDefinitionImpl[T]) getType() reflect.Type {
+	return this.t
 }
 
-func (b *BeanDefinitionImpl[T]) getNames() []string {
-	return b.names
+func (this *BeanDefinitionImpl[T]) getNames() []string {
+	return this.names
 }
 
-func (b *BeanDefinitionImpl[T]) isPrimary() bool {
-	return b.primary
+func (this *BeanDefinitionImpl[T]) isPrimary() bool {
+	return this.primary
 }
 
-func (b *BeanDefinitionImpl[T]) getScope() Scope {
-	return b.scope
+func (this *BeanDefinitionImpl[T]) getScope() Scope {
+	return this.scope
 }
 
-func (b *BeanDefinitionImpl[T]) getProfiles() []string {
-	return b.profiles
+func (this *BeanDefinitionImpl[T]) getProfiles() []string {
+	return this.profiles
 }
 
-func (b *BeanDefinitionImpl[T]) instantiate() any {
-	b.instance = b.factoryMethod()
-	b.postConstruct()
-	return b.instance
+func (this *BeanDefinitionImpl[T]) instantiate() any {
+	this.instance = this.factoryMethod()
+	this.postConstruct()
+	return this.instance
 }
 
-func (b *BeanDefinitionImpl[T]) postConstruct() {
-	if b.postConstructMethod != nil {
-		b.postConstructMethod(b.instance.(T))
+func (this *BeanDefinitionImpl[T]) postConstruct() {
+	if this.postConstructMethod != nil {
+		this.postConstructMethod(this.instance.(T))
 	}
 }
 
-func (b *BeanDefinitionImpl[T]) preDestroyEligible() bool {
-	return b.preDestroyMethod != nil
+func (this *BeanDefinitionImpl[T]) preDestroyEligible() bool {
+	return this.preDestroyMethod != nil
 }
 
-func (b *BeanDefinitionImpl[T]) preDestroy() {
+func (this *BeanDefinitionImpl[T]) preDestroy() {
 	defer err.Recover(func(err any) {
-		slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", b, err, debug.Stack()))
+		slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", this, err, debug.Stack()))
 	})
-	if b.instance != nil {
-		b.preDestroyMethod(b.instance.(T))
+	if this.instance != nil {
+		this.preDestroyMethod(this.instance.(T))
 	}
 }
 
-func (b *BeanDefinitionImpl[T]) getInstance() any {
-	return b.instance
+func (this *BeanDefinitionImpl[T]) getInstance() any {
+	return this.instance
 }
 
-func (b *BeanDefinitionImpl[T]) getMutex() *sync.Mutex {
-	return &b.mutex
+func (this *BeanDefinitionImpl[T]) getMutex() *sync.Mutex {
+	return &this.mutex
 }
 
 // Implements String
-func (b *BeanDefinitionImpl[T]) String() string {
-	return fmt.Sprintf("%s[%s%s%s]", b.t, lang.If(b.scope == Singleton, "singleton", "prototype"), lang.If(b.primary, " primary", ""), lang.If(len(b.names) > 0, " "+strings.Join(b.names, ", "), ""))
+func (this *BeanDefinitionImpl[T]) String() string {
+	return fmt.Sprintf("%s[%s%s%s]", this.t, lang.If(this.scope == Singleton, "singleton", "prototype"), lang.If(this.primary, " primary", ""), lang.If(len(this.names) > 0, " "+strings.Join(this.names, ", "), ""))
 }

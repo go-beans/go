@@ -179,16 +179,14 @@ func (this *BeanDefinitionImpl[T]) postConstruct() {
 }
 
 func (this *BeanDefinitionImpl[T]) preDestroyEligible() bool {
-	return this.preDestroyMethod != nil
+	return this.instance != nil && this.preDestroyMethod != nil && this.scope == Singleton
 }
 
 func (this *BeanDefinitionImpl[T]) preDestroy() {
 	defer err.Recover(func(err any) {
 		slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", this, err, debug.Stack()))
 	})
-	if this.instance != nil {
-		this.preDestroyMethod(this.instance.(T))
-	}
+	this.preDestroyMethod(this.instance.(T))
 }
 
 func (this *BeanDefinitionImpl[T]) getInstance() any {

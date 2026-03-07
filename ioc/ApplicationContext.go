@@ -21,13 +21,12 @@ var applicationContext atomic.Pointer[ApplicationContext]
 var applicationContextMu sync.Mutex
 
 type ApplicationContext struct {
-	context            context.Context
-	cancel             context.CancelFunc
-	beans              map[reflect.Type][]BeanDefinition
-	named              map[string]BeanDefinition
-	preDestroyEligible []BeanDefinition
-	startTime          time.Time
-	servicesCount      int32
+	context       context.Context
+	cancel        context.CancelFunc
+	beans         map[reflect.Type][]BeanDefinition
+	named         map[string]BeanDefinition
+	startTime     time.Time
+	servicesCount atomic.Int32
 }
 
 func applicationContextInstance() *ApplicationContext {
@@ -45,13 +44,11 @@ func newApplicationContext() *ApplicationContext {
 	slog.Info(fmt.Sprintf("ioc.ApplicationContext: starting with PID %d", os.Getpid()))
 	context, cancel := context.WithCancel(context.Background())
 	return &ApplicationContext{
-		context:            context,
-		cancel:             cancel,
-		beans:              make(map[reflect.Type][]BeanDefinition),
-		named:              make(map[string]BeanDefinition),
-		preDestroyEligible: make([]BeanDefinition, 0),
-		startTime:          time.Now(),
-		servicesCount:      0,
+		context:   context,
+		cancel:    cancel,
+		beans:     make(map[reflect.Type][]BeanDefinition),
+		named:     make(map[string]BeanDefinition),
+		startTime: time.Now(),
 	}
 }
 
@@ -100,7 +97,7 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 	}
 }
 
-func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
+func (this *ApplicationContext) beanInstance(bean BeanDefinition) (instance any) {
 	defer err.Recover(func(err any) {
 		slog.Error(fmt.Sprintf("Could not initialize bean %v\n%v\n%s", bean, err, debug.Stack()))
 		this.Close()
@@ -115,10 +112,7 @@ func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 		if bean.getInstance() == nil {
 			concurrent.Synchronized(bean.getMutex(), func() {
 				if bean.getInstance() == nil {
-					if bean.preDestroyEligible() {
-						this.preDestroyEligible = append(this.preDestroyEligible, bean)
-					}
-					this.servicesCount++
+					this.servicesCount.Add(1)
 					bean.instantiate()
 				}
 			})
@@ -126,7 +120,10 @@ func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 		}
 		return bean.getInstance()
 	}
-	return bean.instantiate()
+	concurrent.Synchronized(bean.getMutex(), func() {
+		instance = bean.instantiate()
+	})
+	return instance
 }
 
 func (this *ApplicationContext) eligible(registered, requested reflect.Type) bool {
@@ -159,26 +156,34 @@ func (this *ApplicationContext) eligible(registered, requested reflect.Type) boo
 }
 
 func (this *ApplicationContext) Refresh() {
-	for _, beans := range this.beans {
-		for _, bean := range beans {
-			if bean.getScope() == Singleton && !bean.isLazy() {
-				this.beanInstance(bean)
-			}
+	this.foreachBean(func(bean BeanDefinition) {
+		if bean.getScope() == Singleton && !bean.isLazy() {
+			this.beanInstance(bean)
 		}
-	}
+	})
 }
 
 func (this *ApplicationContext) Close() {
 	concurrent.Synchronized(&applicationContextMu, func() {
 		if applicationContext.CompareAndSwap(this, nil) {
 			startTheshold := time.Now()
-			slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d running services", this.servicesCount))
+			slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d running services", this.servicesCount.Load()))
 			this.cancel()
-			for i := len(this.preDestroyEligible) - 1; i >= 0; i-- {
-				slog.Debug(fmt.Sprintf("ioc.ApplicationContext: destroying %v", this.preDestroyEligible[i]))
-				this.preDestroyEligible[i].preDestroy()
-			}
+			this.foreachBean(func(bean BeanDefinition) {
+				if bean.preDestroyEligible() {
+					slog.Debug(fmt.Sprintf("ioc.ApplicationContext: destroying %v", bean))
+					bean.preDestroy()
+				}
+			})
 			slog.Info(fmt.Sprintf("ioc.ApplicationContext: context closed in %v, uptime %v", time.Since(startTheshold), time.Since(this.startTime)))
 		}
 	})
+}
+
+func (this *ApplicationContext) foreachBean(do func(BeanDefinition)) {
+	for _, beans := range this.beans {
+		for _, bean := range beans {
+			do(bean)
+		}
+	}
 }

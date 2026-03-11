@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/go-external-config/go/env"
 	"github.com/go-external-config/go/lang"
 	"github.com/go-external-config/go/util/err"
 )
@@ -20,13 +21,24 @@ const (
 	Prototype
 )
 
+var lifecycleType = reflect.TypeOf((*Lifecycle)(nil)).Elem()
+var phasedType = reflect.TypeOf((*Phased)(nil)).Elem()
+var applicationRunnerType = reflect.TypeOf((*ApplicationRunner)(nil)).Elem()
+var orderedType = reflect.TypeOf((*Ordered)(nil)).Elem()
+
 type BeanDefinition interface {
+	getScope() Scope
 	getType() reflect.Type
 	getNames() []string
 	isPrimary() bool
 	isLazy() bool
+	isLifecycleBean() bool
+	isPhased() bool
+	isApplicationRunner() bool
+	isOrdered() bool
 	getDependsOn() []string
-	getScope() Scope
+	getPhase() *int
+	getOrder() *int
 	getProfiles() []string
 	instantiate() any
 	getInstance() any
@@ -37,12 +49,14 @@ type BeanDefinition interface {
 }
 
 type BeanDefinitionImpl[T any] struct {
+	scope               Scope
 	t                   reflect.Type
 	names               []string
-	scope               Scope
 	primary             bool
 	lazy                bool
 	dependsOn           []string
+	phase               *int
+	order               *int
 	profiles            []string
 	factoryMethod       func() T
 	postConstructMethod func(T)
@@ -53,10 +67,7 @@ type BeanDefinitionImpl[T any] struct {
 
 func newBeanDefinition[T any]() *BeanDefinitionImpl[T] {
 	return &BeanDefinitionImpl[T]{
-		t:         lang.TypeOf[T](),
-		names:     make([]string, 0),
-		dependsOn: make([]string, 0),
-		profiles:  make([]string, 0),
+		t: lang.TypeOf[T](),
 	}
 }
 
@@ -75,7 +86,7 @@ func (this *BeanDefinitionImpl[T]) Scope(scope string) *BeanDefinitionImpl[T] {
 
 // Set optional name(s)
 func (this *BeanDefinitionImpl[T]) Name(names ...string) *BeanDefinitionImpl[T] {
-	lang.AssertState(len(this.names) == 0, "Name is defined twice")
+	lang.AssertState(this.names == nil, "Name is defined twice")
 	this.names = names
 	return this
 }
@@ -94,16 +105,42 @@ func (this *BeanDefinitionImpl[T]) Lazy() *BeanDefinitionImpl[T] {
 	return this
 }
 
-// Depends on beans.
+// Depends on beans initialization
 func (this *BeanDefinitionImpl[T]) DependsOn(beans ...string) *BeanDefinitionImpl[T] {
-	lang.AssertState(len(this.dependsOn) == 0, "DependsOn is defined twice")
+	lang.AssertState(this.dependsOn == nil, "DependsOn is defined twice")
 	this.dependsOn = beans
+	return this
+}
+
+// Phase for Lifecycle beans. Default: 0
+//
+// phase 0 - normal components
+//
+// negative phases - infrastructure
+//
+// positive phases - late-start services
+func (this *BeanDefinitionImpl[T]) Phase(phase int) *BeanDefinitionImpl[T] {
+	lang.AssertState(this.isLifecycleBean(), "Phase may be applied only to Lifecycle bean")
+	lang.AssertState(this.phase == nil, "Phase is defined twice")
+	this.phase = &phase
+	return this
+}
+
+// Order for ApplicationRunner beans. Default: math.MaxInt
+//
+// lower order - executes first
+//
+// higher order - executes later
+func (this *BeanDefinitionImpl[T]) Order(order int) *BeanDefinitionImpl[T] {
+	lang.AssertState(this.isApplicationRunner(), "Order may be applied only to ApplicationRunner")
+	lang.AssertState(this.order == nil, "Order is defined twice")
+	this.order = &order
 	return this
 }
 
 // Profile binding
 func (this *BeanDefinitionImpl[T]) Profile(profileExpr ...string) *BeanDefinitionImpl[T] {
-	lang.AssertState(len(this.profiles) == 0, "Profile is defined twice")
+	lang.AssertState(this.profiles == nil, "Profile is defined twice")
 	this.profiles = profileExpr
 	return this
 }
@@ -136,6 +173,10 @@ func (this *BeanDefinitionImpl[T]) Register() {
 	applicationContextInstance().Register(this)
 }
 
+func (this *BeanDefinitionImpl[T]) getScope() Scope {
+	return this.scope
+}
+
 // Implements BeanDefinition
 func (this *BeanDefinitionImpl[T]) getType() reflect.Type {
 	return this.t
@@ -153,12 +194,32 @@ func (this *BeanDefinitionImpl[T]) isLazy() bool {
 	return this.lazy
 }
 
+func (this *BeanDefinitionImpl[T]) isLifecycleBean() bool {
+	return this.getType().Implements(lifecycleType)
+}
+
+func (this *BeanDefinitionImpl[T]) isPhased() bool {
+	return this.getType().Implements(phasedType)
+}
+
+func (this *BeanDefinitionImpl[T]) isApplicationRunner() bool {
+	return this.getType().Implements(applicationRunnerType)
+}
+
+func (this *BeanDefinitionImpl[T]) isOrdered() bool {
+	return this.getType().Implements(orderedType)
+}
+
 func (this *BeanDefinitionImpl[T]) getDependsOn() []string {
 	return this.dependsOn
 }
 
-func (this *BeanDefinitionImpl[T]) getScope() Scope {
-	return this.scope
+func (this *BeanDefinitionImpl[T]) getPhase() *int {
+	return this.phase
+}
+
+func (this *BeanDefinitionImpl[T]) getOrder() *int {
+	return this.order
 }
 
 func (this *BeanDefinitionImpl[T]) getProfiles() []string {
@@ -168,21 +229,39 @@ func (this *BeanDefinitionImpl[T]) getProfiles() []string {
 func (this *BeanDefinitionImpl[T]) instantiate() any {
 	instance := this.factoryMethod()
 	this.instance = instance
+	var obj any = instance
+	if bean, ok := obj.(BeanNameAware); ok && len(this.names) > 0 {
+		bean.SetBeanName(this.names[0])
+	}
+	if bean, ok := obj.(EnvironmentAware); ok {
+		bean.SetEnvironment(env.Instance())
+	}
 	if this.postConstructMethod != nil {
 		this.postConstructMethod(instance)
+	}
+	if bean, ok := obj.(InitializingBean); ok {
+		bean.AfterPropertiesSet()
 	}
 	return instance
 }
 
 func (this *BeanDefinitionImpl[T]) preDestroyEligible() bool {
-	return this.instance != nil && this.preDestroyMethod != nil && this.scope == Singleton
+	var obj any = this.instance
+	_, isDisposable := obj.(DisposableBean)
+	return this.scope == Singleton && (this.preDestroyMethod != nil || isDisposable)
 }
 
 func (this *BeanDefinitionImpl[T]) preDestroy() {
 	defer err.Recover(func(err any) {
 		slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", this, err, debug.Stack()))
 	})
-	this.preDestroyMethod(this.instance.(T))
+	if this.preDestroyMethod != nil {
+		this.preDestroyMethod(this.instance.(T))
+	}
+	var obj any = this.instance
+	if bean, ok := obj.(DisposableBean); ok {
+		bean.Destroy()
+	}
 }
 
 func (this *BeanDefinitionImpl[T]) getInstance() any {
@@ -195,5 +274,10 @@ func (this *BeanDefinitionImpl[T]) getMutex() *sync.Mutex {
 
 // Implements String
 func (this *BeanDefinitionImpl[T]) String() string {
-	return fmt.Sprintf("%s[%s%s%s]", this.t, lang.If(this.scope == Singleton, "singleton", "prototype"), lang.If(this.primary, " primary", ""), lang.If(len(this.names) > 0, " "+strings.Join(this.names, ", "), ""))
+	return fmt.Sprintf("%s[%s%s%s%s%s]", this.t,
+		lang.If(this.scope == Singleton, "singleton", "prototype"),
+		lang.If(this.primary, " primary", ""),
+		lang.If(this.isLifecycleBean(), " Lifecycle", ""),
+		lang.If(this.isApplicationRunner(), " ApplicationRunner", ""),
+		lang.If(len(this.names) > 0, " "+strings.Join(this.names, ", "), ""))
 }

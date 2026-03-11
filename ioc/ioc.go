@@ -1,3 +1,32 @@
+// 0. Bean registration
+//
+// 1. Bean instantiation
+//
+// 2. Dependency injection
+//
+// 3. Aware callbacks
+//
+// 4. PostConstruct
+//
+// 5. InitializingBean.AfterPropertiesSet()
+//
+// 6. Lfecycle.Start()
+//
+// 7. ContextRefreshedEvent
+//
+// 8. ApplicationRunner.Run()
+//
+// 9. ApplicationReadyEvent / ApplicationFailedEvent
+//
+// # APPLICATION RUNNING
+//
+// 10. ContextClosedEvent
+//
+// 11. Lfecycle.Stop()
+//
+// 12. PreDestroy
+//
+// 13. DisposableBean.Destroy()
 package ioc
 
 import (
@@ -39,9 +68,15 @@ func Context() context.Context {
 	return applicationContextInstance().context
 }
 
-// Refresh application context: instantiate and initialize all non-lazy singeton beans. Omit if you want beans to be `lazy` by default
+// Refresh application context: instantiate and initialize all non-lazy singeton beans
 func Refresh() {
 	applicationContextInstance().Refresh()
+}
+
+// Refresh application context
+// Execute ApplicationRunner(s)
+func Run() {
+	applicationContextInstance().Run()
 }
 
 // To be used in main to defer resources cleanup

@@ -3,7 +3,7 @@ module github.com/go-beans/go
 go 1.24.5
 
 require (
-	github.com/go-external-config/go v1.0.23
+	github.com/go-external-config/go v1.0.24
 	github.com/stretchr/testify v1.10.0
 )
 
@@ -15,3 +15,4 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+

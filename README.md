@@ -16,7 +16,7 @@ The `ApplicationContext` is the service for an advanced factory capable of maint
 
 An IoC container manages one or more beans. These beans are registered using the form that you supply to the container.
 
-    ioc.Bean[type]().Scope("scope").Name("name").Profile("expression").Primary().Lazy().DependsOn("name").Factory(method).PostConstruct(method).PreDestroy(method).Register()
+    ioc.Bean[type]().Scope("scope").Name("name").Profile("expression").Primary().Lazy().DependsOn("name").Phase(phase).Order(order).Factory(method).PostConstruct(method).PreDestroy(method).Register()
 
 Within the container itself, these bean definitions are represented as `BeanDefinition` objects, which contain (among other information) the following metadata:
 
@@ -75,8 +75,9 @@ project/internal/package/MyService.go:
       }
     }
 
-    func (s *MyService) DoSomething() {
+    func (s *MyService) Run(args []string) {
       s.httpClient().Get("http://example.com")
+      ...
     }
 
 > Each service knows and cares only about it's own dependencies when `Service A` uses `Service B` uses `Service C`.
@@ -88,14 +89,9 @@ project/cmd/package/main.go:
 
 	import _ "project/internal/package/context"
 
-	var myService = ioc.Inject[*package.MyService]()
-
 	func main() {
 	  defer ioc.Close()
-	  ioc.Refresh()
-
-	  myService().DoSomething()
-
+	  ioc.Run()
 	  // ioc.AwaitTermination()
 	}
 

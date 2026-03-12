@@ -9,21 +9,21 @@ type ExitCodeError struct {
 
 func NewExitCodeError(code int, message string) *ExitCodeError {
 	return &ExitCodeError{
-		AbstractError: err.NewAbstractError(message),
+		AbstractError: err.NewAbstractError(message, nil, err.StackTrace(1)),
 		code:          code,
 	}
 }
 
 func NewExitCodeErrorFrom(code int, message string, cause any) *ExitCodeError {
 	return &ExitCodeError{
-		AbstractError: err.NewAbstractErrorFrom(message, cause),
+		AbstractError: err.NewAbstractError(message, cause, err.StackTrace(1)),
 		code:          code,
 	}
 }
 
 func NewExitCodeErrorWith(code int, message string, cause any, stackTrace []uintptr) *ExitCodeError {
 	return &ExitCodeError{
-		AbstractError: err.NewAbstractErrorWith(message, cause, stackTrace),
+		AbstractError: err.NewAbstractError(message, cause, stackTrace),
 		code:          code,
 	}
 }

@@ -8,6 +8,6 @@ type ExecutionException struct {
 
 func NewExecutionException(message string, cause any, stackTrace []uintptr) *ExecutionException {
 	return &ExecutionException{
-		AbstractException: err.NewAbstractExceptionWith(message, cause, stackTrace),
+		AbstractException: err.NewAbstractException(message, cause, stackTrace),
 	}
 }

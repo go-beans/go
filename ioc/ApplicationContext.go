@@ -2,6 +2,7 @@ package ioc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -111,9 +112,7 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 
 func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	defer err.Recover(func(err any) {
-		slog.Error(fmt.Sprintf("Could not initialize bean %v\n%v\n%s", bean, err, debug.Stack()))
-		this.Close()
-		os.Exit(1)
+		this.doExit(err, "Could not initialize bean %v\n%v", bean, err)
 	})
 	for _, name := range bean.getDependsOn() {
 		bean, ok := this.named[name]
@@ -166,9 +165,7 @@ func (this *ApplicationContext) eligible(registered, requested reflect.Type) boo
 
 func (this *ApplicationContext) Refresh() {
 	defer err.Recover(func(err any) {
-		slog.Error(fmt.Sprintf("Context refresh failed: %v\n%s", err, debug.Stack()))
-		this.Close()
-		os.Exit(1)
+		this.doExit(err, "Context refresh failed: %v", err)
 	})
 
 	threshold := time.Now()
@@ -261,10 +258,7 @@ func (this *ApplicationContext) notifyContextRefreshed() {
 
 func (this *ApplicationContext) Run() {
 	defer err.Recover(func(err any) {
-		slog.Error(fmt.Sprintf("Context run failed: %v\n%s", err, debug.Stack()))
-		this.notifyApplicationFailed()
-		this.Close()
-		os.Exit(1)
+		this.doExit(err, "Context run failed: %v", err)
 	})
 
 	if !this.refreshed.Load() {
@@ -314,6 +308,23 @@ func (this *ApplicationContext) Close() {
 			slog.Info(fmt.Sprintf("ioc.ApplicationContext: context closed in %v, uptime %v", time.Since(theshold), time.Since(this.startTime)))
 		}
 	})
+}
+
+func (this *ApplicationContext) exit(code int, format string, a ...any) {
+	panic(NewExitCodeErrorWithStack(code, fmt.Sprintf(format, a...), nil, err.StackTrace(2)))
+}
+
+func (this *ApplicationContext) doExit(e any, format string, a ...any) {
+	var exitCodeError *ExitCodeError
+	if e1, ok := e.(error); ok && errors.As(e1, &exitCodeError) {
+		slog.Error(err.PrintStackTrace(exitCodeError))
+		this.Close()
+		os.Exit(exitCodeError.code)
+	} else {
+		slog.Error(fmt.Sprintf("%v\n%s", fmt.Sprintf(format, a...), err.PrintStackTrace(e)))
+		this.Close()
+		os.Exit(1)
+	}
 }
 
 func (this *ApplicationContext) stopLifecycleBeans() {

@@ -3,7 +3,6 @@ package concurrent
 import (
 	"fmt"
 	"runtime"
-	"runtime/debug"
 	"sync"
 
 	"github.com/go-external-config/go/util/concurrent"
@@ -80,9 +79,10 @@ func NewExecutor[T any](workers int) *Executor[T] {
 func (e *Executor[T]) Submit(task func() T) Future[T] {
 	f := &futureImpl[T]{result: make(chan resultWrapper[T], 1)}
 
+	stack := err.StackTrace()
 	e.jobs <- func() {
 		defer err.Recover(func(r any) {
-			f.result <- resultWrapper[T]{err: fmt.Errorf("%v\n%s", r, debug.Stack())}
+			f.result <- resultWrapper[T]{err: NewExecutionError(fmt.Sprint(r), r, stack)}
 		})
 		res := task()
 		f.result <- resultWrapper[T]{val: res, err: nil}

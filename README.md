@@ -78,6 +78,9 @@ project/internal/package/MyService.go:
     func (s *MyService) Run(args []string) {
       s.httpClient().Get("http://example.com")
       ...
+      // ioc.Exit(2, "Something failed: %s", "blah")
+      // panic(ioc.NewExitCodeErrorWithCause(5, "Something failed", "Root cause"))
+      // panic(err.NewRuntimeError("Some error"))
     }
 
 > Each service knows and cares only about it's own dependencies when `Service A` uses `Service B` uses `Service C`.

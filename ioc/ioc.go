@@ -86,6 +86,10 @@ func Close() {
 	applicationContextInstance().Close()
 }
 
+func Exit(code int, format string, a ...any) {
+	applicationContextInstance().exit(code, format, a...)
+}
+
 func AwaitTermination() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

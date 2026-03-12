@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
-	"runtime/debug"
 	"strings"
 	"sync"
 
+	"github.com/go-errr/go/err"
 	"github.com/go-external-config/go/env"
 	"github.com/go-external-config/go/lang"
-	"github.com/go-external-config/go/util/err"
 )
 
 type Scope int
@@ -252,8 +251,8 @@ func (this *BeanDefinitionImpl[T]) preDestroyEligible() bool {
 }
 
 func (this *BeanDefinitionImpl[T]) preDestroy() {
-	defer err.Recover(func(err any) {
-		slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", this, err, debug.Stack()))
+	defer err.Recover(func(e any) {
+		slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", this, e, err.PrintStackTrace(e)))
 	})
 	if this.preDestroyMethod != nil {
 		this.preDestroyMethod(this.instance.(T))

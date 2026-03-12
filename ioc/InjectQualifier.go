@@ -1,15 +1,11 @@
 package ioc
 
 import (
-	"fmt"
-	"log/slog"
-	"os"
 	"reflect"
-	"runtime/debug"
 	"sync"
 
+	"github.com/go-errr/go/err"
 	"github.com/go-external-config/go/lang"
-	"github.com/go-external-config/go/util/err"
 )
 
 type InjectQualifier[T any] struct {
@@ -32,10 +28,8 @@ func (this *InjectQualifier[T]) resolve() func() T {
 	var instance T
 	return func() T {
 		once.Do(func() {
-			defer err.Recover(func(err any) {
-				slog.Error(fmt.Sprintf("%v\n%s", err, debug.Stack()))
-				Close()
-				os.Exit(1)
+			defer err.Recover(func(e any) {
+				applicationContextInstance().doExitPrintStackTrace(e, "Cannot resolve dependency")
 			})
 			raw := applicationContextInstance().Bean(&InjectQualifier[any]{
 				t:    this.t,

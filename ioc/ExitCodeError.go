@@ -1,8 +1,6 @@
 package ioc
 
-import (
-	"github.com/go-external-config/go/util/err"
-)
+import "github.com/go-errr/go/err"
 
 type ExitCodeError struct {
 	*err.AbstractError
@@ -11,21 +9,21 @@ type ExitCodeError struct {
 
 func NewExitCodeError(code int, message string) *ExitCodeError {
 	return &ExitCodeError{
-		AbstractError: err.NewAbstractError(message, nil, nil),
+		AbstractError: err.NewAbstractError(message),
 		code:          code,
 	}
 }
 
-func NewExitCodeErrorWithCause(code int, message string, cause any) *ExitCodeError {
+func NewExitCodeErrorFrom(code int, message string, cause any) *ExitCodeError {
 	return &ExitCodeError{
-		AbstractError: err.NewAbstractError(message, cause, nil),
+		AbstractError: err.NewAbstractErrorFrom(message, cause),
 		code:          code,
 	}
 }
 
-func NewExitCodeErrorWithStack(code int, message string, cause any, stackTrace []uintptr) *ExitCodeError {
+func NewExitCodeErrorWith(code int, message string, cause any, stackTrace []uintptr) *ExitCodeError {
 	return &ExitCodeError{
-		AbstractError: err.NewAbstractError(message, cause, stackTrace),
+		AbstractError: err.NewAbstractErrorWith(message, cause, stackTrace),
 		code:          code,
 	}
 }

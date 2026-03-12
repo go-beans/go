@@ -57,7 +57,7 @@ A typical enterprise application does not consist of a single object (or bean). 
 
 Dependency injection (DI) is a process whereby objects define their dependencies (that is, the other objects with which they work) only through arguments to a factory method, or properties that are set on the object instance after it is constructed or returned from a factory method. The container then injects those dependencies when it creates the bean. This process is fundamentally the inverse (hence the name, Inversion of Control) of the bean itself controlling the instantiation or location of its dependencies on its own by using direct construction of objects.
 
-Code is cleaner with the DI principle, and decoupling is more effective when objects are provided with their dependencies. The object does not look up its dependencies and does not know the location or type of the dependencies. As a result, your service become easier to test, particularly when the dependencies are on interfaces, which allow for stub or mock implementations to be used in unit tests.
+Code is cleaner with the DI principle, and decoupling is more effective when objects are provided with their dependencies. The object does not look up its dependencies and does not know the location or type of the dependencies. As a result, your service become easier to test, particularly when the dependencies are on interfaces, which allow for stub or mock implementations to be used in unit tests. Each service knows and cares only about it's own dependencies when `Service A` uses `Service B` uses `Service C`.
 
 project/internal/package/MyService.go:  
 
@@ -79,12 +79,9 @@ project/internal/package/MyService.go:
       s.httpClient().Get("http://example.com")
       ...
       // ioc.Exit(2, "Something failed: %s", "blah")
-      // panic(ioc.NewExitCodeErrorWithCause(5, "Something failed", "Root cause"))
-      // panic(err.NewRuntimeError("Some error"))
+      // panic(ioc.NewExitCodeErrorFrom(5, "Something failed", "Root cause"))
+      // panic(err.NewRuntimeException("Some error"))
     }
-
-> Each service knows and cares only about it's own dependencies when `Service A` uses `Service B` uses `Service C`.
-Actual instantiation is lazy and happens (once for default, singleton scope) when calling the provider method.  
 
 project/cmd/package/main.go:
 

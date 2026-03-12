@@ -9,18 +9,17 @@ import (
 	"os"
 	"reflect"
 	"runtime"
-	"runtime/debug"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	con "github.com/go-beans/go/concurrent"
+	"github.com/go-errr/go/err"
 	"github.com/go-external-config/go/env"
 	"github.com/go-external-config/go/lang"
 	"github.com/go-external-config/go/util/collection"
 	"github.com/go-external-config/go/util/concurrent"
-	"github.com/go-external-config/go/util/err"
 )
 
 var applicationContext atomic.Pointer[ApplicationContext]
@@ -112,7 +111,7 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 
 func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	defer err.Recover(func(err any) {
-		this.doExit(err, "Could not initialize bean %v\n%v", bean, err)
+		this.doExitPrintStackTrace(err, "Could not initialize bean %v", bean)
 	})
 	for _, name := range bean.getDependsOn() {
 		bean, ok := this.named[name]
@@ -165,7 +164,7 @@ func (this *ApplicationContext) eligible(registered, requested reflect.Type) boo
 
 func (this *ApplicationContext) Refresh() {
 	defer err.Recover(func(err any) {
-		this.doExit(err, "Context refresh failed: %v", err)
+		this.doExitPrintStackTrace(err, "Context refresh failed")
 	})
 
 	threshold := time.Now()
@@ -258,7 +257,7 @@ func (this *ApplicationContext) notifyContextRefreshed() {
 
 func (this *ApplicationContext) Run() {
 	defer err.Recover(func(err any) {
-		this.doExit(err, "Context run failed: %v", err)
+		this.doExitPrintStackTrace(err, "Context run failed")
 	})
 
 	if !this.refreshed.Load() {
@@ -311,10 +310,10 @@ func (this *ApplicationContext) Close() {
 }
 
 func (this *ApplicationContext) exit(code int, format string, a ...any) {
-	panic(NewExitCodeErrorWithStack(code, fmt.Sprintf(format, a...), nil, err.StackTrace(2)))
+	panic(NewExitCodeErrorWith(code, fmt.Sprintf(format, a...), nil, err.StackTrace(2)))
 }
 
-func (this *ApplicationContext) doExit(e any, format string, a ...any) {
+func (this *ApplicationContext) doExitPrintStackTrace(e any, format string, a ...any) {
 	var exitCodeError *ExitCodeError
 	if e1, ok := e.(error); ok && errors.As(e1, &exitCodeError) {
 		slog.Error(err.PrintStackTrace(exitCodeError))
@@ -343,8 +342,8 @@ func (this *ApplicationContext) stopLifecycleBeans() {
 		futures := make([]con.Future[BeanDefinition], 0)
 		for _, bean := range beans {
 			futures = append(futures, executor.Submit(func() BeanDefinition {
-				defer err.Recover(func(err any) {
-					slog.Error(fmt.Sprintf("Could not stop Lifecycle bean %v\n%v\n%s", bean, err, debug.Stack()))
+				defer err.Recover(func(e any) {
+					slog.Error(fmt.Sprintf("Could not stop Lifecycle bean %v\n%v\n%s", bean, e, err.PrintStackTrace(e)))
 				})
 				bean.getInstance().(Lifecycle).Stop()
 				return nil
@@ -372,8 +371,8 @@ func (this *ApplicationContext) notifyApplicationFailed() {
 	}, func(bean BeanDefinition) int {
 		return 0
 	}, func(bean BeanDefinition) {
-		defer err.Recover(func(err any) {
-			slog.Error(fmt.Sprintf("Notification processing failed for bean %v\n%v\n%s", bean, err, debug.Stack()))
+		defer err.Recover(func(e any) {
+			slog.Error(fmt.Sprintf("Notification processing failed for bean %v\n%v\n%s", bean, e, err.PrintStackTrace(e)))
 		})
 		bean.getInstance().(ApplicationFailedListener).OnApplicationFailed()
 	})

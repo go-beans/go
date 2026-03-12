@@ -5,8 +5,8 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/go-errr/go/err"
 	"github.com/go-external-config/go/util/concurrent"
-	"github.com/go-external-config/go/util/err"
 )
 
 type Future[T any] interface {
@@ -82,7 +82,7 @@ func (e *Executor[T]) Submit(task func() T) Future[T] {
 	stack := err.StackTrace()
 	e.jobs <- func() {
 		defer err.Recover(func(r any) {
-			f.result <- resultWrapper[T]{err: NewExecutionError(fmt.Sprint(r), r, stack)}
+			f.result <- resultWrapper[T]{err: NewExecutionException(fmt.Sprint(r), r, stack)}
 		})
 		res := task()
 		f.result <- resultWrapper[T]{val: res, err: nil}

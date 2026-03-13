@@ -81,6 +81,7 @@ project/internal/package/MyService.go:
       // ioc.Exit(2, "Something failed: %s", "blah")
       // panic(ioc.NewExitCodeErrorFrom(5, "Something failed", "Root cause"))
       // panic(err.NewRuntimeException("Some error"))
+      // panic("Some error")
     }
 
 project/cmd/package/main.go:

@@ -111,7 +111,7 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 
 func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	defer err.Recover(func(err any) {
-		this.doExitPrintStackTrace(err, "Could not initialize bean %v", bean)
+		this.doExitPrintStackTrace(err, "Could not initialize bean %v. ", bean)
 	})
 	for _, name := range bean.getDependsOn() {
 		bean, ok := this.named[name]
@@ -164,7 +164,7 @@ func (this *ApplicationContext) eligible(registered, requested reflect.Type) boo
 
 func (this *ApplicationContext) Refresh() {
 	defer err.Recover(func(err any) {
-		this.doExitPrintStackTrace(err, "Context refresh failed")
+		this.doExitPrintStackTrace(err, "Context refresh failed. ")
 	})
 
 	threshold := time.Now()
@@ -257,7 +257,7 @@ func (this *ApplicationContext) notifyContextRefreshed() {
 
 func (this *ApplicationContext) Run() {
 	defer err.Recover(func(err any) {
-		this.doExitPrintStackTrace(err, "Context run failed")
+		this.doExitPrintStackTrace(err, "Context run failed. ")
 	})
 
 	if !this.refreshed.Load() {
@@ -320,7 +320,7 @@ func (this *ApplicationContext) doExitPrintStackTrace(e any, format string, a ..
 		this.Close()
 		os.Exit(exitCodeError.code)
 	} else {
-		slog.Error(fmt.Sprintf("%v\n%s", fmt.Sprintf(format, a...), err.PrintStackTrace(e)))
+		slog.Error(fmt.Sprintf("%s%s", fmt.Sprintf(format, a...), err.PrintStackTrace(e)))
 		this.Close()
 		os.Exit(1)
 	}

@@ -3,7 +3,7 @@ module github.com/go-beans/go
 go 1.24.5
 
 require (
-	github.com/go-errr/go v1.0.1
+	github.com/go-errr/go v1.0.3
 	github.com/go-external-config/go v1.0.26
 	github.com/stretchr/testify v1.11.1
 )

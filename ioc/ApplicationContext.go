@@ -2,7 +2,6 @@ package ioc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -314,8 +313,7 @@ func (this *ApplicationContext) exit(code int, format string, a ...any) {
 }
 
 func (this *ApplicationContext) doExitPrintStackTrace(e any, format string, a ...any) {
-	var exitCodeError *ExitCodeError
-	if e1, ok := e.(error); ok && errors.As(e1, &exitCodeError) {
+	if exitCodeError, ok := err.As[*ExitCodeError](e); ok {
 		slog.Error(err.PrintStackTrace(exitCodeError))
 		this.Close()
 		os.Exit(exitCodeError.code)

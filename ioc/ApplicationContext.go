@@ -135,29 +135,23 @@ func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 func (this *ApplicationContext) eligible(registered, requested reflect.Type) bool {
 	if registered.AssignableTo(requested) {
 		return true
-	}
-	if requested.Kind() == reflect.Interface && registered.Implements(requested) {
+	} else if requested.Kind() == reflect.Interface && registered.Implements(requested) {
 		return true
-	}
-
-	if registered.Kind() == reflect.Pointer {
+	} else if registered.Kind() == reflect.Pointer {
 		elem := registered.Elem()
 		if elem.AssignableTo(requested) {
 			return true
-		}
-		if requested.Kind() == reflect.Interface && elem.Implements(requested) {
+		} else if requested.Kind() == reflect.Interface && elem.Implements(requested) {
 			return true
 		}
 	} else {
 		ptr := reflect.PointerTo(registered)
 		if ptr.AssignableTo(requested) {
 			return true
-		}
-		if requested.Kind() == reflect.Interface && ptr.Implements(requested) {
+		} else if requested.Kind() == reflect.Interface && ptr.Implements(requested) {
 			return true
 		}
 	}
-
 	return false
 }
 

@@ -49,6 +49,26 @@ func (f *futureImpl[T]) Result() (T, error) {
 var defaultExecutor *Executor[any]
 var defaultExecutorMu sync.Mutex
 
+// Executor is a fixed-size worker pool for asynchronous task execution.
+//
+// A configured number of worker goroutines is started eagerly and
+// tasks are distributed among them. Task submission uses synchronous
+// handoff via an unbuffered channel. If all workers are busy, Submit()
+// blocks until a worker becomes available. Tasks are never executed
+// by the caller goroutine.
+//
+// Each submitted task returns a Future that allows waiting for the
+// result. Task panics are recovered and converted into an execution
+// error. Future.Get() panics on failure, while Future.Result()
+// returns (value, error).
+//
+// The executor provides natural backpressure and prevents unbounded
+// task queuing. Cancellation, timeouts, and interruption are not
+// supported.
+//
+// Close() stops the executor by closing the job channel. Workers exit
+// after processing already accepted tasks. Submitting after Close()
+// causes a panic.
 type Executor[T any] struct {
 	jobs chan func()
 }

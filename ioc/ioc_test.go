@@ -154,29 +154,29 @@ func NewCalculatorImpl() *CalculatorImpl {
 	}
 }
 
-func (c *CalculatorImpl) Add(a, b int) int {
-	return c.addOperation().Calculate(a, b)
+func (this *CalculatorImpl) Add(a, b int) int {
+	return this.addOperation().Calculate(a, b)
 }
-func (c *CalculatorImpl) Subtract(a, b int) int {
-	return c.subtractOperation().Calculate(a, b)
+func (this *CalculatorImpl) Subtract(a, b int) int {
+	return this.subtractOperation().Calculate(a, b)
 }
-func (c *CalculatorImpl) Multiply(a, b int) int {
-	return c.multiplyOperation().Calculate(a, b)
+func (this *CalculatorImpl) Multiply(a, b int) int {
+	return this.multiplyOperation().Calculate(a, b)
 }
-func (c *CalculatorImpl) Divide(a, b int) int {
-	return c.divideOperation().Calculate(a, b)
+func (this *CalculatorImpl) Divide(a, b int) int {
+	return this.divideOperation().Calculate(a, b)
 }
-func (c *CalculatorImpl) LastOperation() string {
-	return c.lastOperation
+func (this *CalculatorImpl) LastOperation() string {
+	return this.lastOperation
 }
-func (c *CalculatorImpl) SetLastOperation(lastOperation string) {
-	c.lastOperation = lastOperation
+func (this *CalculatorImpl) SetLastOperation(lastOperation string) {
+	this.lastOperation = lastOperation
 }
-func (c *CalculatorImpl) PostConstruct() {
-	c.lastOperation = fmt.Sprintf("PostConstruct: %v", c.addOperation().Calculate(2, 2))
+func (this *CalculatorImpl) PostConstruct() {
+	this.lastOperation = fmt.Sprintf("PostConstruct: %v", this.addOperation().Calculate(2, 2))
 }
-func (c *CalculatorImpl) PreDestroy() {
-	c.lastOperation = "PreDestroy"
+func (this *CalculatorImpl) PreDestroy() {
+	this.lastOperation = "PreDestroy"
 }
 
 type Operation interface {
@@ -190,8 +190,8 @@ type AddOperation struct {
 func NewAddOperation() *AddOperation {
 	return &AddOperation{calculator: ioc.Inject[Calculator]()}
 }
-func (o *AddOperation) Calculate(a, b int) int {
-	o.calculator().SetLastOperation("add")
+func (this *AddOperation) Calculate(a, b int) int {
+	this.calculator().SetLastOperation("add")
 	return a + b
 }
 
@@ -202,8 +202,8 @@ type SubtractOperation struct {
 func NewSubtractOperation() *SubtractOperation {
 	return &SubtractOperation{calculator: ioc.Inject[Calculator]()}
 }
-func (o *SubtractOperation) Calculate(a, b int) int {
-	o.calculator().SetLastOperation("subtract")
+func (this *SubtractOperation) Calculate(a, b int) int {
+	this.calculator().SetLastOperation("subtract")
 	return a - b
 }
 
@@ -214,8 +214,8 @@ type MultiplyOperation struct {
 func NewMultiplyOperation() *MultiplyOperation {
 	return &MultiplyOperation{calculator: ioc.Inject[Calculator]()}
 }
-func (o *MultiplyOperation) Calculate(a, b int) int {
-	o.calculator().SetLastOperation("multiply")
+func (this *MultiplyOperation) Calculate(a, b int) int {
+	this.calculator().SetLastOperation("multiply")
 	return a * b
 }
 
@@ -226,11 +226,11 @@ type DivideOperation struct {
 func NewDivideOperation() *DivideOperation {
 	return &DivideOperation{calculator: ioc.Inject[Calculator]()}
 }
-func (o *DivideOperation) Calculate(a, b int) int {
-	o.calculator().SetLastOperation("divide")
+func (this *DivideOperation) Calculate(a, b int) int {
+	this.calculator().SetLastOperation("divide")
 	return a / b
 }
-func (o *DivideOperation) PreDestroy() {
+func (this *DivideOperation) PreDestroy() {
 	panic("failed")
 }
 
@@ -242,11 +242,11 @@ func NewConsumer() *Consumer {
 	return &Consumer{
 		calculator: ioc.Inject[Calculator]()}
 }
-func (c Consumer) compute(a, b int) int {
-	x := c.calculator().Add(a, b)
-	x = c.calculator().Multiply(x, b)
-	x = c.calculator().Subtract(x, b)
-	x = c.calculator().Divide(x, b)
+func (this Consumer) compute(a, b int) int {
+	x := this.calculator().Add(a, b)
+	x = this.calculator().Multiply(x, b)
+	x = this.calculator().Subtract(x, b)
+	x = this.calculator().Divide(x, b)
 	return x
 }
 
@@ -254,28 +254,28 @@ type MockCalculator struct {
 	mock.Mock
 }
 
-func (m *MockCalculator) Add(a, b int) int {
-	args := m.Called(a, b)
+func (this *MockCalculator) Add(a, b int) int {
+	args := this.Called(a, b)
 	return args.Int(0)
 }
-func (m *MockCalculator) Subtract(a, b int) int {
-	args := m.Called(a, b)
+func (this *MockCalculator) Subtract(a, b int) int {
+	args := this.Called(a, b)
 	return args.Int(0)
 }
-func (m *MockCalculator) Multiply(a, b int) int {
-	args := m.Called(a, b)
+func (this *MockCalculator) Multiply(a, b int) int {
+	args := this.Called(a, b)
 	return args.Int(0)
 }
-func (m *MockCalculator) Divide(a, b int) int {
-	args := m.Called(a, b)
+func (this *MockCalculator) Divide(a, b int) int {
+	args := this.Called(a, b)
 	return args.Int(0)
 }
-func (m *MockCalculator) LastOperation() string {
-	args := m.Called()
+func (this *MockCalculator) LastOperation() string {
+	args := this.Called()
 	return args.String(0)
 }
-func (m *MockCalculator) SetLastOperation(o string) {
-	m.Called(o)
+func (this *MockCalculator) SetLastOperation(o string) {
+	this.Called(o)
 }
 
 func clearMethodExpectations(m *mock.Mock, methodName string) {

@@ -18,12 +18,12 @@ type futureImpl[T any] struct {
 	once   sync.Once
 	result chan resultWrapper[T]
 	val    T
-	err    error
+	err    any
 }
 
 type resultWrapper[T any] struct {
 	val T
-	err error
+	err any
 }
 
 func (f *futureImpl[T]) wait() {
@@ -36,14 +36,18 @@ func (f *futureImpl[T]) wait() {
 func (f *futureImpl[T]) Get() T {
 	f.wait()
 	if f.err != nil {
-		panic(f.err)
+		panic(NewExecutionExceptionFrom(fmt.Sprint(f.err), f.err))
 	}
 	return f.val
 }
 
 func (f *futureImpl[T]) Result() (T, error) {
 	f.wait()
-	return f.val, f.err
+	if f.err == nil {
+		return f.val, nil
+	} else {
+		return f.val, NewExecutionExceptionFrom(fmt.Sprint(f.err), f.err)
+	}
 }
 
 var defaultExecutor *Executor[any]
@@ -87,11 +91,7 @@ func DefaultExecutor() *Executor[any] {
 func NewExecutor[T any](workers int) *Executor[T] {
 	e := &Executor[T]{jobs: make(chan func())}
 	for i := 0; i < workers; i++ {
-		go func() {
-			for job := range e.jobs {
-				job()
-			}
-		}()
+		e.runWorker()
 	}
 	return e
 }
@@ -99,16 +99,23 @@ func NewExecutor[T any](workers int) *Executor[T] {
 func (e *Executor[T]) Submit(task func() T) Future[T] {
 	f := &futureImpl[T]{result: make(chan resultWrapper[T], 1)}
 
-	stack := err.StackTrace()
 	e.jobs <- func() {
 		defer err.Recover(func(r any) {
-			f.result <- resultWrapper[T]{err: NewExecutionException(fmt.Sprint(r), r, stack)}
+			f.result <- resultWrapper[T]{err: r}
 		})
 		res := task()
 		f.result <- resultWrapper[T]{val: res, err: nil}
 	}
 
 	return f
+}
+
+func (e *Executor[T]) runWorker() {
+	go func() {
+		for job := range e.jobs {
+			job()
+		}
+	}()
 }
 
 func (e *Executor[T]) Close() {

@@ -29,7 +29,7 @@ func (this *InjectQualifier[T]) resolve() func() T {
 	return func() T {
 		once.Do(func() {
 			defer err.Recover(func(e any) {
-				applicationContextInstance().doExitPrintStackTrace(e, "Cannot resolve dependency. ")
+				applicationContextInstance().doExitPrintStackTrace(e, "Cannot resolve dependency.")
 			})
 			raw := applicationContextInstance().Bean(&InjectQualifier[any]{
 				t:    this.t,

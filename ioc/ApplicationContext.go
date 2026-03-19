@@ -110,7 +110,7 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 
 func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	defer err.Recover(func(err any) {
-		this.doExitPrintStackTrace(err, "Could not initialize bean %v. ", bean)
+		this.doExitPrintStackTrace(err, "Could not initialize bean %v.", bean)
 	})
 	for _, name := range bean.getDependsOn() {
 		bean, ok := this.named[name]
@@ -157,7 +157,7 @@ func (this *ApplicationContext) eligible(registered, requested reflect.Type) boo
 
 func (this *ApplicationContext) Refresh() {
 	defer err.Recover(func(err any) {
-		this.doExitPrintStackTrace(err, "Context refresh failed. ")
+		this.doExitPrintStackTrace(err, "Context refresh failed.")
 	})
 
 	threshold := time.Now()
@@ -250,7 +250,8 @@ func (this *ApplicationContext) notifyContextRefreshed() {
 
 func (this *ApplicationContext) Run() {
 	defer err.Recover(func(err any) {
-		this.doExitPrintStackTrace(err, "Context run failed. ")
+		this.notifyApplicationFailed()
+		this.doExitPrintStackTrace(err, "Context run failed.")
 	})
 
 	if !this.refreshed.Load() {
@@ -312,7 +313,7 @@ func (this *ApplicationContext) doExitPrintStackTrace(e any, format string, a ..
 		this.Close()
 		os.Exit(exitCodeError.code)
 	} else {
-		slog.Error(fmt.Sprintf("%s%s", fmt.Sprintf(format, a...), err.PrintStackTrace(e)))
+		slog.Error(fmt.Sprintf("%s %s", fmt.Sprintf(format, a...), err.PrintStackTrace(e)))
 		this.Close()
 		os.Exit(1)
 	}
@@ -335,7 +336,7 @@ func (this *ApplicationContext) stopLifecycleBeans() {
 		for _, bean := range beans {
 			futures = append(futures, executor.Submit(func() BeanDefinition {
 				defer err.Recover(func(e any) {
-					slog.Error(fmt.Sprintf("Could not stop Lifecycle bean %v\n%v\n%s", bean, e, err.PrintStackTrace(e)))
+					slog.Error(fmt.Sprintf("Could not stop Lifecycle bean %v\n%s", bean, err.PrintStackTrace(e)))
 				})
 				bean.getInstance().(Lifecycle).Stop()
 				return nil
@@ -364,7 +365,7 @@ func (this *ApplicationContext) notifyApplicationFailed() {
 		return 0
 	}, func(bean BeanDefinition) {
 		defer err.Recover(func(e any) {
-			slog.Error(fmt.Sprintf("Notification processing failed for bean %v\n%v\n%s", bean, e, err.PrintStackTrace(e)))
+			slog.Error(fmt.Sprintf("Notification processing failed for bean %v\n%s", bean, err.PrintStackTrace(e)))
 		})
 		bean.getInstance().(ApplicationFailedListener).OnApplicationFailed()
 	})

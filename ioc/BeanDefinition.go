@@ -252,7 +252,7 @@ func (this *BeanDefinitionImpl[T]) preDestroyEligible() bool {
 
 func (this *BeanDefinitionImpl[T]) preDestroy() {
 	defer err.Recover(func(e any) {
-		slog.Error(fmt.Sprintf("Could not destroy bean %v\n%v\n%s", this, e, err.PrintStackTrace(e)))
+		slog.Error(fmt.Sprintf("Could not destroy bean %v\n%s", this, err.PrintStackTrace(e)))
 	})
 	if this.preDestroyMethod != nil {
 		this.preDestroyMethod(this.instance.(T))

@@ -110,7 +110,7 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 
 func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	defer err.Recover(func(err any) {
-		this.doExitPrintStackTrace(err, "Could not initialize bean %v\n.", bean)
+		this.doExitPrintStackTrace(err, "Could not initialize bean %v.", bean)
 	})
 	for _, name := range bean.getDependsOn() {
 		bean, ok := this.named[name]

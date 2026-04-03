@@ -336,7 +336,7 @@ func (this *ApplicationContext) stopLifecycleBeans() {
 		for _, bean := range beans {
 			futures = append(futures, executor.Submit(func() BeanDefinition {
 				defer err.Recover(func(e any) {
-					slog.Error(fmt.Sprintf("Could not stop Lifecycle bean %v\n%s", bean, err.PrintStackTrace(e)))
+					slog.Error(fmt.Sprintf("Could not stop Lifecycle bean %v. %s", bean, err.PrintStackTrace(e)))
 				})
 				bean.getInstance().(Lifecycle).Stop()
 				return nil
@@ -365,7 +365,7 @@ func (this *ApplicationContext) notifyApplicationFailed() {
 		return 0
 	}, func(bean BeanDefinition) {
 		defer err.Recover(func(e any) {
-			slog.Error(fmt.Sprintf("Notification processing failed for bean %v\n%s", bean, err.PrintStackTrace(e)))
+			slog.Error(fmt.Sprintf("Notification processing failed for bean %v. %s", bean, err.PrintStackTrace(e)))
 		})
 		bean.getInstance().(ApplicationFailedListener).OnApplicationFailed()
 	})

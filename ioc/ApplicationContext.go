@@ -109,8 +109,8 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 }
 
 func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
-	defer err.Recover(func(err any) {
-		this.doExitPrintStackTrace(err, "Could not initialize bean %v.", bean)
+	defer err.Recover(func(e any) {
+		this.doExitPrintStackTrace(e, "Could not initialize bean %v.", bean)
 	})
 	for _, name := range bean.getDependsOn() {
 		bean, ok := this.named[name]
@@ -156,8 +156,8 @@ func (this *ApplicationContext) eligible(registered, requested reflect.Type) boo
 }
 
 func (this *ApplicationContext) Refresh() {
-	defer err.Recover(func(err any) {
-		this.doExitPrintStackTrace(err, "Context refresh failed.")
+	defer err.Recover(func(e any) {
+		this.doExitPrintStackTrace(e, "Context refresh failed.")
 	})
 
 	threshold := time.Now()
@@ -249,9 +249,9 @@ func (this *ApplicationContext) notifyContextRefreshed() {
 }
 
 func (this *ApplicationContext) Run() {
-	defer err.Recover(func(err any) {
+	defer err.Recover(func(e any) {
 		this.notifyApplicationFailed()
-		this.doExitPrintStackTrace(err, "Context run failed.")
+		this.doExitPrintStackTrace(e, "Context run failed.")
 	})
 
 	if !this.refreshed.Load() {

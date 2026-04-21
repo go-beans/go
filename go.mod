@@ -4,7 +4,7 @@ go 1.24.5
 
 require (
 	github.com/go-errr/go v1.0.9
-	github.com/go-external-config/go v1.0.26
+	github.com/go-external-config/go v1.0.27
 	github.com/stretchr/testify v1.11.1
 )
 

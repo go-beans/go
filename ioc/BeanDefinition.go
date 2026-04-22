@@ -20,10 +20,10 @@ const (
 	Prototype
 )
 
-var lifecycleType = reflect.TypeOf((*Lifecycle)(nil)).Elem()
-var phasedType = reflect.TypeOf((*Phased)(nil)).Elem()
-var applicationRunnerType = reflect.TypeOf((*ApplicationRunner)(nil)).Elem()
-var orderedType = reflect.TypeOf((*Ordered)(nil)).Elem()
+var lifecycleType = lang.TypeOf[Lifecycle]()
+var phasedType = lang.TypeOf[Phased]()
+var applicationRunnerType = lang.TypeOf[ApplicationRunner]()
+var orderedType = lang.TypeOf[Ordered]()
 
 type BeanDefinition interface {
 	getScope() Scope

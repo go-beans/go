@@ -68,7 +68,7 @@ func (this *ApplicationContext) Register(bean BeanDefinition) {
 		if len(bean.getNames()) > 0 {
 			for _, name := range bean.getNames() {
 				_, ok := this.named[name]
-				lang.AssertState(!ok, "Bean with name '%s' already registered", name)
+				lang.Assert(!ok, "Bean with name '%s' already registered", name)
 				this.named[name] = bean
 			}
 		}
@@ -80,7 +80,7 @@ func (this *ApplicationContext) Register(bean BeanDefinition) {
 func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 	if len(inject.name) > 0 {
 		bean, ok := this.named[inject.name]
-		lang.AssertState(ok, "No bean named '%s' found", inject.name)
+		lang.Assert(ok, "No bean named '%s' found", inject.name)
 		return this.beanInstance(bean)
 	} else {
 		var candidates []BeanDefinition
@@ -97,12 +97,12 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 			}
 		}
 
-		lang.AssertState(len(primaryCandidates) <= 1, "Multiple primary beans of type %v found. Use name qualifier.\n%v", inject.t, primaryCandidates)
+		lang.Assert(len(primaryCandidates) <= 1, "Multiple primary beans of type %v found. Use name qualifier.\n%v", inject.t, primaryCandidates)
 		if len(primaryCandidates) == 1 {
 			return this.beanInstance(primaryCandidates[0])
 		} else {
-			lang.AssertState(len(candidates) > 0, "No bean of type %v found", inject.t)
-			lang.AssertState(len(candidates) <= 1, "Multiple beans of type %v found. Use name qualifier or mark one of the beans primary.\n%v", inject.t, candidates)
+			lang.Assert(len(candidates) > 0, "No bean of type %v found", inject.t)
+			lang.Assert(len(candidates) <= 1, "Multiple beans of type %v found. Use name qualifier or mark one of the beans primary.\n%v", inject.t, candidates)
 			return this.beanInstance(candidates[0])
 		}
 	}
@@ -114,7 +114,7 @@ func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 	})
 	for _, name := range bean.getDependsOn() {
 		bean, ok := this.named[name]
-		lang.AssertState(ok, "No dependency bean named '%s' found", name)
+		lang.Assert(ok, "No dependency bean named '%s' found", name)
 		this.beanInstance(bean)
 	}
 	if bean.getScope() == Singleton {

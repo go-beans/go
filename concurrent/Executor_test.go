@@ -17,7 +17,7 @@ func TestExecutorWithPanicHandling(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		futures = append(futures, exec.Submit(func() int {
 			time.Sleep(time.Second)
-			lang.AssertState(i%2 != 0, "simulated panic %d", i)
+			lang.Assert(i%2 != 0, "simulated panic %d", i)
 			return i * i
 		}))
 	}
@@ -28,9 +28,9 @@ func TestExecutorWithPanicHandling(t *testing.T) {
 		res, err := f.Result()
 		// fmt.Printf("%d: %v, %v\n", i, res, err)
 		if i%2 == 0 {
-			lang.AssertState(err != nil, "expected panic for index %d, got result %d", i, res)
+			lang.Assert(err != nil, "expected panic for index %d, got result %d", i, res)
 		} else {
-			lang.AssertState(err == nil, "unexpected error for index %d: %v", i, err)
+			lang.Assert(err == nil, "unexpected error for index %d: %v", i, err)
 		}
 	}
 	fmt.Printf("Finish %v\n", time.Now())

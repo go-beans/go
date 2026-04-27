@@ -36,7 +36,7 @@ func (this *InjectQualifier[T]) resolve() func() T {
 				name: this.name,
 			})
 			val, ok := raw.(T)
-			lang.AssertState(ok, "Cannot cast bean to expected type %v; got %T", this.t, raw)
+			lang.Assert(ok, "Cannot cast bean to expected type %v; got %T", this.t, raw)
 			instance = val
 		})
 		return instance

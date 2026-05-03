@@ -8,9 +8,9 @@ Lightweight, inversion of control implementation inspired by Spring, made for Go
 
 ## Using the Container
 
-The `ApplicationContext` is the service for an advanced factory capable of maintaining a registry of different beans and their dependencies. By using the method below, you can retrieve instances of your beans.
+The `ApplicationContext` is the service for an advanced factory capable of maintaining a registry of different beans and their dependencies. Use `inject` field tag for bean dependencies.
 
-    service = ioc.Inject[type]("optionalName")
+    service *Type  `inject:"optionalName"`
 
 ## Bean Overview
 
@@ -20,8 +20,8 @@ An IoC container manages one or more beans. These beans are registered using the
 
 Within the container itself, these bean definitions are represented as `BeanDefinition` objects, which contain (among other information) the following metadata:
 
-* A type of the bean being defined.
-* Bean behavioral configuration elements, which state how the bean should behave in the container (scope, lifecycle callbacks, and so forth).
+- A type of the bean being defined.
+- Bean behavioral configuration elements, which state how the bean should behave in the container (scope, lifecycle callbacks, and so forth).
 
 This metadata translates to a set of properties that make up each bean definition.
 
@@ -31,7 +31,7 @@ A bean definition is essentially a recipe for creating one or more objects. The 
 
 Dedicate a file a.k.a. _context_ or _configuration_ for bean definitions inside package `init` method. One can reuse configured and ready-to-go services in different parts of application by for importing package where needed and injecting beans.
 
-project/internal/package/context/context.go:  
+project/internal/package/context/context.go:
 
     func init() {
       ioc.Bean[*package.MyService]().Factory(package.NewMyService).Register()
@@ -59,24 +59,20 @@ Dependency injection (DI) is a process whereby objects define their dependencies
 
 Code is cleaner with the DI principle, and decoupling is more effective when objects are provided with their dependencies. The object does not look up its dependencies and does not know the location or type of the dependencies. As a result, your service become easier to test, particularly when the dependencies are on interfaces, which allow for stub or mock implementations to be used in unit tests. Each service knows and cares only about it's own dependencies when `Service A` uses `Service B` uses `Service C`.
 
-project/internal/package/MyService.go:  
+project/internal/package/MyService.go:
 
     type MyService struct {
-      httpClient  func() *http.Client
-      redisClient func() *redis.Client
-      cron        func() *cron.Cron
+      httpClient  *http.Client `inject:""`
+      redisClient *redis.Client `inject:""`
+      cron        *cron.Cron `inject:""`
     }
 
     func NewMyService() *MyService {
-      return &MyService{
-        httpClient:  ioc.Inject[*http.Client](),
-        redisClient: ioc.Inject[*redis.Client](),
-        cron:        ioc.Inject[*cron.Cron](),
-      }
+      return &MyService{}
     }
 
-    func (s *MyService) Run(args []string) {
-      s.httpClient().Get("http://example.com")
+    func (this *MyService) Run(args []string) {
+      this.httpClient.Get("http://example.com")
       ...
       // ioc.Exit(2, "Something failed: %s", "blah")
       // panic(ioc.NewExitCodeErrorFrom(5, "Something failed", "Root cause"))
@@ -86,15 +82,15 @@ project/internal/package/MyService.go:
 
 project/cmd/package/main.go:
 
-	package main
+    package main
 
-	import _ "project/internal/package/context"
+    import _ "project/internal/package/context"
 
-	func main() {
-	  defer ioc.Close()
-	  ioc.Run()
-	  // ioc.AwaitTermination()
-	}
+    func main() {
+      defer ioc.Close()
+      ioc.Run()
+      // ioc.AwaitTermination()
+    }
 
 ### Bean Scopes
 
@@ -102,10 +98,10 @@ When you create a bean definition, you create a recipe for creating actual insta
 
 You can control not only the various dependencies and configuration values that are to be plugged into an object that is created from a particular bean definition but also control the scope of the objects created from a particular bean definition. This approach is powerful and flexible, because you can choose the scope of the objects you create through configuration instead of having to bake in the scope of an object at the type level. Beans can be defined to be deployed in one of a number of scopes.
 
-| Scope      | Description                                                                                  |
-|------------|----------------------------------------------------------------------------------------------|
-| singleton  | (Default) Scopes a single bean definition to a single object instance for IoC container.   |
-| prototype  | Scopes a single bean definition to any number of object instances.                            |
+| Scope     | Description                                                                              |
+| --------- | ---------------------------------------------------------------------------------------- |
+| singleton | (Default) Scopes a single bean definition to a single object instance for IoC container. |
+| prototype | Scopes a single bean definition to any number of object instances.                       |
 
 ### The Singleton Scope
 
@@ -119,7 +115,7 @@ The non-singleton prototype scope of bean deployment results in the creation of 
 
 ### Lifecycle Callbacks
 
-The container calls `PostConstruct(method)` after bean instantiation and lets a bean perform initialization work after the container has set all necessary properties on the bean. `PreDestroy(method)` lets a bean get a callback when the container that contains it is destroyed before graceful shutdown. 
+The container calls `PostConstruct(method)` after bean instantiation and lets a bean perform initialization work after the container has set all necessary properties on the bean. `PreDestroy(method)` lets a bean get a callback when the container that contains it is destroyed before graceful shutdown.
 
 > Be aware that `PostConstruct` and initialization methods in general are executed within the container’s singleton creation lock. The bean instance is only considered as fully initialized and ready to be published to others after returning from the `PostConstruct` method. Such individual initialization methods are only meant for validating the configuration state and possibly preparing some data structures based on the given configuration but no further activity with external bean access.
 
@@ -135,21 +131,21 @@ Properties play an important role in almost all applications and may originate f
 
 Bean definition profiles provide a mechanism in the core container that allows for registration of different beans in different environments. The word, “environment,” can mean different things to different users, and this feature can help with many use cases, including:
 
-* Working against an in-memory datasource in development versus looking up some other datasource when in QA or production.
-* Registering monitoring infrastructure only when deploying an application into a performance environment.
-* Registering customized implementations of beans for customer A versus customer B deployments.
+- Working against an in-memory datasource in development versus looking up some other datasource when in QA or production.
+- Registering monitoring infrastructure only when deploying an application into a performance environment.
+- Registering customized implementations of beans for customer A versus customer B deployments.
 
 The profile string may contain a simple profile name (for example, `production`) or a profile expression. A profile expression allows for more complicated profile logic to be expressed (for example, `production & us-east`). The following operators are supported in profile expressions:
 
-* `!`: A logical NOT of the profile
-* `&`: A logical AND of the profiles
-* `|`: A logical OR of the profiles
+- `!`: A logical NOT of the profile
+- `&`: A logical AND of the profiles
+- `|`: A logical OR of the profiles
 
 If a `Component` is marked with `Profile("p1,p2")`, that bean is not registered or processed unless profiles 'p1' or 'p2' have been activated. If a given profile is prefixed with the NOT operator (`!`), the annotated element is registered only if the profile is not active. For example, given `Profile("p1,!p2")`, registration will occur if profile 'p1' is active or if profile 'p2' is not active.
 
 You can use a `profiles.active` `Environment` property to specify which profiles are active. You can specify the property in any of the ways described [here](https://github.com/go-external-config/go). For example, you could include it in your `application.properties`, as shown in the following example:
 
-	profiles.active=dev,hsqldb
+    profiles.active=dev,hsqldb
 
 If no profile is active, a default profile is enabled.
 
@@ -170,4 +166,5 @@ go get github.com/go-beans/go
 ```
 
 ## See also
+
 [github.com/go-external-config/go](https://github.com/go-external-config/go)

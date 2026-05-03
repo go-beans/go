@@ -80,6 +80,9 @@ func (this *ApplicationContext) Register(bean BeanDefinition) {
 func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 	if len(inject.name) > 0 {
 		bean, ok := this.named[inject.name]
+		if !ok && inject.optional {
+			return nil
+		}
 		lang.Assert(ok, "No bean named '%s' found", inject.name)
 		return this.beanInstance(bean)
 	} else {
@@ -101,6 +104,9 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 		if len(primaryCandidates) == 1 {
 			return this.beanInstance(primaryCandidates[0])
 		} else {
+			if len(candidates) == 0 && inject.optional {
+				return nil
+			}
 			lang.Assert(len(candidates) > 0, "No bean of type %v found", inject.t)
 			lang.Assert(len(candidates) <= 1, "Multiple beans of type %v found. Use name qualifier or mark one of the beans primary.\n%v", inject.t, candidates)
 			return this.beanInstance(candidates[0])

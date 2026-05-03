@@ -9,8 +9,9 @@ import (
 )
 
 type InjectQualifier[T any] struct {
-	t    reflect.Type
-	name string
+	t        reflect.Type
+	name     string
+	optional bool
 }
 
 func newInjectQualifier[T any]() *InjectQualifier[T] {
@@ -23,6 +24,11 @@ func (this *InjectQualifier[T]) Name(name string) *InjectQualifier[T] {
 	return this
 }
 
+func (this *InjectQualifier[T]) Optional() *InjectQualifier[T] {
+	this.optional = true
+	return this
+}
+
 func (this *InjectQualifier[T]) resolve() func() T {
 	var once sync.Once
 	var instance T
@@ -32,12 +38,15 @@ func (this *InjectQualifier[T]) resolve() func() T {
 				applicationContextInstance().doExitPrintStackTrace(e, "Cannot resolve dependency.")
 			})
 			raw := applicationContextInstance().Bean(&InjectQualifier[any]{
-				t:    this.t,
-				name: this.name,
+				t:        this.t,
+				name:     this.name,
+				optional: this.optional,
 			})
-			val, ok := raw.(T)
-			lang.Assert(ok, "Cannot cast bean to expected type %v; got %T", this.t, raw)
-			instance = val
+			if raw != nil {
+				val, ok := raw.(T)
+				lang.Assert(ok, "Cannot cast bean to expected type %v; got %T", this.t, raw)
+				instance = val
+			}
 		})
 		return instance
 	}

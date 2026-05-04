@@ -46,13 +46,15 @@ import (
 const InjectTag = "inject"
 const Optional = "optional"
 
+type Provider[T any] func() T
+
 // Register bean
 func Bean[T any]() *BeanDefinitionImpl[T] {
 	return newBeanDefinition[T]()
 }
 
-// Inject bean by type and (optionaly) name
-func Inject[T any](name ...string) func() T {
+// Resolve bean by type and (optionaly) name
+func Resolve[T any](name ...string) Provider[T] {
 	lang.Assert(len(name) <= 1, "Optional bean name expected")
 	if len(name) == 1 {
 		return newInjectQualifier[T]().Name(name[0]).resolve()
@@ -60,24 +62,26 @@ func Inject[T any](name ...string) func() T {
 	return newInjectQualifier[T]().resolve()
 }
 
+// InjectBeans injects matching beans into fields tagged with `inject:""`.
+// It is a manual equivalent of container-managed field injection.
 func InjectBeans[T any](target *T) *T {
-	InjectBeansAny(target)
+	injectBeansAny(target)
 	return target
 }
 
-func InjectBeansAny(target any) any {
+func injectBeansAny(target any) any {
 	reflects.ForEachTaggedField(target, InjectTag, func(field reflects.Field) {
 		name, optional := parseInjectTag(field)
-		bean := applicationContextInstance().Bean(&InjectQualifier[any]{
+		qualifier := InjectQualifier[any]{
 			t:        field.Type,
 			name:     name,
 			optional: optional,
-		})
+		}
+		bean := qualifier.resolve()()
 		if bean != nil {
 			field.Value.Set(reflect.ValueOf(bean))
 		}
 	})
-
 	return target
 }
 

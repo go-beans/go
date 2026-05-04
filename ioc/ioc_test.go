@@ -63,11 +63,11 @@ func TestMain(m *testing.M) {
 
 func Test_Ioc(t *testing.T) {
 	t.Run("general examples", func(t *testing.T) {
-		preinitializedMap := ioc.Inject[*map[string]string]("preinitializedMap")
+		preinitializedMap := ioc.Resolve[*map[string]string]("preinitializedMap")
 		require.Equal(t, "value", (*preinitializedMap())["key"])
 
-		singletonCounter1 := ioc.Inject[*Counter]("singletonCounter")
-		singletonCounter2 := ioc.Inject[*Counter]("singletonCounter")
+		singletonCounter1 := ioc.Resolve[*Counter]("singletonCounter")
+		singletonCounter2 := ioc.Resolve[*Counter]("singletonCounter")
 		require.Equal(t, 0, singletonCounter1().count)
 		require.Equal(t, 0, singletonCounter2().count)
 		singletonCounter1().count++
@@ -75,8 +75,8 @@ func Test_Ioc(t *testing.T) {
 		require.Equal(t, 2, singletonCounter1().count)
 		require.Equal(t, 2, singletonCounter2().count)
 
-		prototypeCounter1 := ioc.Inject[*Counter]("prototypeCounter")
-		prototypeCounter2 := ioc.Inject[*Counter]("prototypeCounter")
+		prototypeCounter1 := ioc.Resolve[*Counter]("prototypeCounter")
+		prototypeCounter2 := ioc.Resolve[*Counter]("prototypeCounter")
 		require.Equal(t, 0, prototypeCounter1().count)
 		require.Equal(t, 0, prototypeCounter2().count)
 		prototypeCounter1().count++
@@ -84,10 +84,10 @@ func Test_Ioc(t *testing.T) {
 		require.Equal(t, 1, prototypeCounter1().count)
 		require.Equal(t, 1, prototypeCounter2().count)
 
-		counterAlias := ioc.Inject[*Counter]("counter")
+		counterAlias := ioc.Resolve[*Counter]("counter")
 		require.Equal(t, 2, counterAlias().count)
 
-		httpClient := ioc.Inject[*http.Client]()
+		httpClient := ioc.Resolve[*http.Client]()
 		require.Equal(t, "200 OK", optional.OfCommaErr(httpClient().Get("http://example.com")).Value().Status)
 	})
 }
@@ -95,7 +95,8 @@ func Test_Ioc(t *testing.T) {
 func Test_IocCalculator(t *testing.T) {
 	t.Run("calculator singleton share data, post construct executed", func(t *testing.T) {
 		consumer := NewConsumer()
-		calculator := ioc.Inject[Calculator]()
+		ioc.InjectBeans(consumer)
+		calculator := ioc.Resolve[Calculator]()
 
 		require.Equal(t, "PostConstruct: 4", calculator().LastOperation())
 		require.Equal(t, 101, consumer.compute(100, 2))
@@ -106,9 +107,9 @@ func Test_IocCalculator(t *testing.T) {
 func Test_IocCalculatorMock(t *testing.T) {
 	t.Run("mock any bean for test", func(t *testing.T) {
 		t.Skip("Switch MockCalculator profile to 'test', switch CalculatorImpl profile to '!test', disable Test_IocCalculator, enable this test")
-		mockCalculator := ioc.Inject[*MockCalculator]()()
+		mockCalculator := ioc.Resolve[*MockCalculator]()()
 		consumer := NewConsumer()
-		calculator := ioc.Inject[Calculator]()
+		calculator := ioc.Resolve[Calculator]()
 
 		clearMethodExpectations(&mockCalculator.Mock, "LastOperation")
 		mockCalculator.On("LastOperation").Return("PostConstruct: 4")
@@ -138,33 +139,28 @@ type Calculator interface {
 }
 
 type CalculatorImpl struct {
-	addOperation      func() Operation
-	subtractOperation func() Operation
-	multiplyOperation func() Operation
-	divideOperation   func() Operation
+	addOperation      Operation `inject:"addOperation"`
+	subtractOperation Operation `inject:"subtractOperation"`
+	multiplyOperation Operation `inject:"multiplyOperation"`
+	divideOperation   Operation `inject:"divideOperation"`
 	lastOperation     string
 }
 
 func NewCalculatorImpl() *CalculatorImpl {
-	return &CalculatorImpl{
-		addOperation:      ioc.Inject[Operation]("addOperation"),
-		subtractOperation: ioc.Inject[Operation]("subtractOperation"),
-		multiplyOperation: ioc.Inject[Operation]("multiplyOperation"),
-		divideOperation:   ioc.Inject[Operation]("divideOperation"),
-	}
+	return &CalculatorImpl{}
 }
 
 func (this *CalculatorImpl) Add(a, b int) int {
-	return this.addOperation().Calculate(a, b)
+	return this.addOperation.Calculate(a, b)
 }
 func (this *CalculatorImpl) Subtract(a, b int) int {
-	return this.subtractOperation().Calculate(a, b)
+	return this.subtractOperation.Calculate(a, b)
 }
 func (this *CalculatorImpl) Multiply(a, b int) int {
-	return this.multiplyOperation().Calculate(a, b)
+	return this.multiplyOperation.Calculate(a, b)
 }
 func (this *CalculatorImpl) Divide(a, b int) int {
-	return this.divideOperation().Calculate(a, b)
+	return this.divideOperation.Calculate(a, b)
 }
 func (this *CalculatorImpl) LastOperation() string {
 	return this.lastOperation
@@ -173,7 +169,7 @@ func (this *CalculatorImpl) SetLastOperation(lastOperation string) {
 	this.lastOperation = lastOperation
 }
 func (this *CalculatorImpl) PostConstruct() {
-	this.lastOperation = fmt.Sprintf("PostConstruct: %v", this.addOperation().Calculate(2, 2))
+	this.lastOperation = fmt.Sprintf("PostConstruct: %v", this.addOperation.Calculate(2, 2))
 }
 func (this *CalculatorImpl) PreDestroy() {
 	this.lastOperation = "PreDestroy"
@@ -184,50 +180,50 @@ type Operation interface {
 }
 
 type AddOperation struct {
-	calculator func() Calculator
+	calculator Calculator `inject:""`
 }
 
 func NewAddOperation() *AddOperation {
-	return &AddOperation{calculator: ioc.Inject[Calculator]()}
+	return &AddOperation{}
 }
 func (this *AddOperation) Calculate(a, b int) int {
-	this.calculator().SetLastOperation("add")
+	this.calculator.SetLastOperation("add")
 	return a + b
 }
 
 type SubtractOperation struct {
-	calculator func() Calculator
+	calculator Calculator `inject:""`
 }
 
 func NewSubtractOperation() *SubtractOperation {
-	return &SubtractOperation{calculator: ioc.Inject[Calculator]()}
+	return &SubtractOperation{}
 }
 func (this *SubtractOperation) Calculate(a, b int) int {
-	this.calculator().SetLastOperation("subtract")
+	this.calculator.SetLastOperation("subtract")
 	return a - b
 }
 
 type MultiplyOperation struct {
-	calculator func() Calculator
+	calculator Calculator `inject:""`
 }
 
 func NewMultiplyOperation() *MultiplyOperation {
-	return &MultiplyOperation{calculator: ioc.Inject[Calculator]()}
+	return &MultiplyOperation{}
 }
 func (this *MultiplyOperation) Calculate(a, b int) int {
-	this.calculator().SetLastOperation("multiply")
+	this.calculator.SetLastOperation("multiply")
 	return a * b
 }
 
 type DivideOperation struct {
-	calculator func() Calculator
+	calculator Calculator `inject:""`
 }
 
 func NewDivideOperation() *DivideOperation {
-	return &DivideOperation{calculator: ioc.Inject[Calculator]()}
+	return &DivideOperation{}
 }
 func (this *DivideOperation) Calculate(a, b int) int {
-	this.calculator().SetLastOperation("divide")
+	this.calculator.SetLastOperation("divide")
 	return a / b
 }
 func (this *DivideOperation) PreDestroy() {
@@ -235,18 +231,17 @@ func (this *DivideOperation) PreDestroy() {
 }
 
 type Consumer struct {
-	calculator func() Calculator
+	calculator Calculator `inject:""`
 }
 
 func NewConsumer() *Consumer {
-	return &Consumer{
-		calculator: ioc.Inject[Calculator]()}
+	return &Consumer{}
 }
 func (this Consumer) compute(a, b int) int {
-	x := this.calculator().Add(a, b)
-	x = this.calculator().Multiply(x, b)
-	x = this.calculator().Subtract(x, b)
-	x = this.calculator().Divide(x, b)
+	x := this.calculator.Add(a, b)
+	x = this.calculator.Multiply(x, b)
+	x = this.calculator.Subtract(x, b)
+	x = this.calculator.Divide(x, b)
 	return x
 }
 

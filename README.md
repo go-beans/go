@@ -10,7 +10,7 @@ Lightweight, inversion of control implementation inspired by Spring, made for Go
 
 The `ApplicationContext` is the service for an advanced factory capable of maintaining a registry of different beans and their dependencies. Use `inject` field tag for bean dependencies.
 
-    service *Type  `inject:"optionalName"`
+    service type `inject:"optionalName"`
 
 ## Bean Overview
 
@@ -62,9 +62,9 @@ Code is cleaner with the DI principle, and decoupling is more effective when obj
 project/internal/package/MyService.go:
 
     type MyService struct {
-      httpClient  *http.Client `inject:""`
+      httpClient  *http.Client  `inject:""`
       redisClient *redis.Client `inject:""`
-      cron        *cron.Cron `inject:""`
+      cron        *cron.Cron    `inject:""`
     }
 
     func NewMyService() *MyService {

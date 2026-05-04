@@ -235,9 +235,10 @@ func (this *BeanDefinitionImpl[T]) instantiate() any {
 	if bean, ok := obj.(EnvironmentAware); ok {
 		bean.SetEnvironment(env.Instance())
 	}
-	if reflect.ValueOf(instance).Kind() == reflect.Pointer {
+	value := reflect.ValueOf(instance)
+	if value.Kind() == reflect.Pointer && !value.IsNil() && value.Elem().Kind() == reflect.Struct {
 		env.BindPropertiesAny(instance)
-		InjectBeansAny(instance)
+		injectBeansAny(instance)
 	}
 	if this.postConstructMethod != nil {
 		this.postConstructMethod(instance)

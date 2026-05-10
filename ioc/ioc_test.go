@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 	ioc.Bean[*AddOperation]().Name("addOperation").Factory(NewAddOperation).Register()
 	ioc.Bean[*SubtractOperation]().Name("subtractOperation").Factory(NewSubtractOperation).Register()
 	ioc.Bean[*MultiplyOperation]().Name("multiplyOperation").Factory(NewMultiplyOperation).Register()
-	ioc.Bean[*DivideOperation]().Name("divideOperation").Factory(NewDivideOperation).PreDestroy((*DivideOperation).PreDestroy).Register()
+	ioc.Bean[*DivideOperation]().Name("divideOperation").Order(0).Factory(NewDivideOperation).PreDestroy((*DivideOperation).PreDestroy).Register()
 
 	ioc.Bean[*MockCalculator]().Primary().Profile("!test").Factory(func() *MockCalculator {
 		mockCalculator := new(MockCalculator)
@@ -101,6 +101,16 @@ func Test_IocCalculator(t *testing.T) {
 		require.Equal(t, "PostConstruct: 4", calculator().LastOperation())
 		require.Equal(t, 101, consumer.compute(100, 2))
 		require.Equal(t, "divide", calculator().LastOperation())
+		operations := calculator().Operations()
+		require.Equal(t, 4, len(operations))
+		_, ok := operations[0].(*DivideOperation)
+		require.Equal(t, true, ok)
+		_, ok = operations[1].(*MultiplyOperation)
+		require.Equal(t, true, ok)
+		_, ok = operations[2].(*AddOperation)
+		require.Equal(t, true, ok)
+		_, ok = operations[3].(*SubtractOperation)
+		require.Equal(t, true, ok)
 	})
 }
 
@@ -134,15 +144,17 @@ type Calculator interface {
 	Subtract(a, b int) int
 	Multiply(a, b int) int
 	Divide(a, b int) int
+	Operations() []Operation
 	LastOperation() string
 	SetLastOperation(string)
 }
 
 type CalculatorImpl struct {
-	addOperation      Operation `inject:"addOperation"`
-	subtractOperation Operation `inject:"subtractOperation"`
-	multiplyOperation Operation `inject:"multiplyOperation"`
-	divideOperation   Operation `inject:"divideOperation"`
+	addOperation      Operation   `inject:"addOperation"`
+	subtractOperation Operation   `inject:"subtractOperation"`
+	multiplyOperation Operation   `inject:"multiplyOperation"`
+	divideOperation   Operation   `inject:"divideOperation"`
+	operations        []Operation `inject:""`
 	lastOperation     string
 }
 
@@ -158,6 +170,9 @@ func (this *CalculatorImpl) Subtract(a, b int) int {
 }
 func (this *CalculatorImpl) Multiply(a, b int) int {
 	return this.multiplyOperation.Calculate(a, b)
+}
+func (this *CalculatorImpl) Operations() []Operation {
+	return this.operations
 }
 func (this *CalculatorImpl) Divide(a, b int) int {
 	return this.divideOperation.Calculate(a, b)
@@ -190,6 +205,9 @@ func (this *AddOperation) Calculate(a, b int) int {
 	this.calculator.SetLastOperation("add")
 	return a + b
 }
+func (this *AddOperation) Order() int {
+	return 2
+}
 
 type SubtractOperation struct {
 	calculator Calculator `inject:""`
@@ -202,6 +220,9 @@ func (this *SubtractOperation) Calculate(a, b int) int {
 	this.calculator.SetLastOperation("subtract")
 	return a - b
 }
+func (this *SubtractOperation) Order() int {
+	return 2
+}
 
 type MultiplyOperation struct {
 	calculator Calculator `inject:""`
@@ -213,6 +234,9 @@ func NewMultiplyOperation() *MultiplyOperation {
 func (this *MultiplyOperation) Calculate(a, b int) int {
 	this.calculator.SetLastOperation("multiply")
 	return a * b
+}
+func (this *MultiplyOperation) Order() int {
+	return 1
 }
 
 type DivideOperation struct {
@@ -228,6 +252,9 @@ func (this *DivideOperation) Calculate(a, b int) int {
 }
 func (this *DivideOperation) PreDestroy() {
 	panic("failed")
+}
+func (this *DivideOperation) Order() int {
+	return 1
 }
 
 type Consumer struct {

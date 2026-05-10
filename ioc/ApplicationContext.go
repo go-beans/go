@@ -85,6 +85,20 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 		}
 		lang.Assert(ok, "No bean named '%s' found", inject.name)
 		return this.beanInstance(bean)
+
+	} else if inject.t.Kind() == reflect.Slice {
+		elemType := inject.t.Elem()
+		orderedBeans := this.orderedBeans(this.registered, func(bean BeanDefinition) bool {
+			return this.eligible(bean.getType(), elemType)
+		})
+		result := reflect.MakeSlice(inject.t, 0, 0)
+		for _, bean := range orderedBeans {
+			value := reflect.ValueOf(bean)
+			lang.Assert(value.Type().AssignableTo(elemType), "Bean %s is not assignable to %s", value.Type(), elemType)
+			result = reflect.Append(result, value)
+		}
+		return result.Interface()
+
 	} else {
 		var candidates []BeanDefinition
 		var primaryCandidates []BeanDefinition
@@ -176,10 +190,8 @@ func (this *ApplicationContext) Refresh() {
 }
 
 func (this *ApplicationContext) initializeBeans() {
-	this.foreachBean(this.registered, func(bean BeanDefinition) bool {
+	this.foreachBeanDefinition(this.registered, func(bean BeanDefinition) bool {
 		return bean.getScope() == Singleton && !bean.isLazy()
-	}, func(bean BeanDefinition) int {
-		return 0
 	}, func(bean BeanDefinition) {
 		this.beanInstance(bean)
 	})
@@ -207,9 +219,9 @@ func (this *ApplicationContext) startLifecycleBeans() {
 			}))
 		}
 		for _, future := range futures {
-			b, e := future.Result()
+			bean, e := future.Result()
 			if e == nil {
-				this.started = append(this.started, b)
+				this.started = append(this.started, bean)
 			} else if err == nil {
 				err = e
 			}
@@ -222,36 +234,66 @@ func (this *ApplicationContext) startLifecycleBeans() {
 
 func (this *ApplicationContext) phaseToLifecycleBeans(beans []BeanDefinition) map[int][]BeanDefinition {
 	phaseToBeans := make(map[int][]BeanDefinition)
-	this.foreachBean(beans, func(bean BeanDefinition) bool {
+	this.foreachBeanDefinition(beans, func(bean BeanDefinition) bool {
 		return bean.isLifecycleBean()
-	}, func(bean BeanDefinition) int {
-		return 0
 	}, func(bean BeanDefinition) {
-		var phase int
+		lang.Assert(bean.getScope() == Singleton, "Lifecycle bean must be a singleton: %s", bean)
+		phase := math.MaxInt
 		if bean.getPhase() != nil {
 			phase = *bean.getPhase()
 		} else if bean.isPhased() {
 			phase = this.beanInstance(bean).(Phased).Phase()
 		}
-		phased, ok := phaseToBeans[phase]
+		beans, ok := phaseToBeans[phase]
 		if !ok {
-			phased = make([]BeanDefinition, 0)
+			beans = make([]BeanDefinition, 0)
 		}
-		phased = append(phased, bean)
-		phaseToBeans[phase] = phased
+		beans = append(beans, bean)
+		phaseToBeans[phase] = beans
 	})
 	return phaseToBeans
 }
 
+func (this *ApplicationContext) orderedBeans(beans []BeanDefinition, filter func(b BeanDefinition) bool) []any {
+	orderToBeans := make(map[int][]any)
+	this.foreachBeanDefinition(beans, filter,
+		func(bean BeanDefinition) {
+			instance := this.beanInstance(bean)
+			order := math.MaxInt
+			if bean.getOrder() != nil {
+				order = *bean.getOrder()
+			} else if bean.isOrdered() {
+				order = instance.(Ordered).Order()
+			}
+			beans, ok := orderToBeans[order]
+			if !ok {
+				beans = make([]any, 0)
+			}
+			beans = append(beans, instance)
+			orderToBeans[order] = beans
+		})
+
+	sortedOrder := make([]int, 0, len(orderToBeans))
+	for order := range orderToBeans {
+		sortedOrder = append(sortedOrder, order)
+	}
+	sort.Ints(sortedOrder)
+
+	orderedBeans := make([]any, 0)
+	for _, phase := range sortedOrder {
+		orderedBeans = append(orderedBeans, orderToBeans[phase]...)
+	}
+	return orderedBeans
+}
+
 func (this *ApplicationContext) notifyContextRefreshed() {
-	this.foreachBean(this.instantiated, func(bean BeanDefinition) bool {
+	orderedBeans := this.orderedBeans(this.instantiated, func(bean BeanDefinition) bool {
 		_, ok := bean.getInstance().(ContextRefreshedListener)
 		return ok
-	}, func(bean BeanDefinition) int {
-		return 0
-	}, func(bean BeanDefinition) {
-		bean.getInstance().(ContextRefreshedListener).OnContextRefreshed()
 	})
+	for _, bean := range orderedBeans {
+		bean.(ContextRefreshedListener).OnContextRefreshed()
+	}
 }
 
 func (this *ApplicationContext) Run() {
@@ -268,29 +310,22 @@ func (this *ApplicationContext) Run() {
 }
 
 func (this *ApplicationContext) executeApplicationRunnerBeans() {
-	this.foreachBean(this.registered, func(bean BeanDefinition) bool {
+	orderedBeans := this.orderedBeans(this.registered, func(bean BeanDefinition) bool {
 		return bean.isApplicationRunner()
-	}, func(bean BeanDefinition) int {
-		if bean.getOrder() != nil {
-			return *bean.getOrder()
-		} else if bean.isOrdered() {
-			return this.beanInstance(bean).(Ordered).Order()
-		}
-		return math.MaxInt
-	}, func(bean BeanDefinition) {
-		this.beanInstance(bean).(ApplicationRunner).Run(os.Args)
 	})
+	for _, bean := range orderedBeans {
+		bean.(ApplicationRunner).Run(os.Args)
+	}
 }
 
 func (this *ApplicationContext) notifyApplicationReady() {
-	this.foreachBean(this.instantiated, func(bean BeanDefinition) bool {
+	orderedBeans := this.orderedBeans(this.instantiated, func(bean BeanDefinition) bool {
 		_, ok := bean.getInstance().(ApplicationReadyListener)
 		return ok
-	}, func(bean BeanDefinition) int {
-		return 0
-	}, func(bean BeanDefinition) {
-		bean.getInstance().(ApplicationReadyListener).OnApplicationReady()
 	})
+	for _, bean := range orderedBeans {
+		bean.(ApplicationReadyListener).OnApplicationReady()
+	}
 }
 
 func (this *ApplicationContext) Close() {
@@ -355,39 +390,34 @@ func (this *ApplicationContext) stopLifecycleBeans() {
 }
 
 func (this *ApplicationContext) destroyBeans() {
-	this.foreachBean(collection.ReverseSlice(this.instantiated),
+	this.foreachBeanDefinition(collection.ReverseSlice(this.instantiated),
 		func(bean BeanDefinition) bool { return bean.preDestroyEligible() },
-		func(b BeanDefinition) int { return 0 },
 		func(bean BeanDefinition) {
 			bean.preDestroy()
 		})
 }
 
 func (this *ApplicationContext) notifyApplicationFailed() {
-	this.foreachBean(this.instantiated, func(bean BeanDefinition) bool {
+	orderedBeans := this.orderedBeans(this.instantiated, func(bean BeanDefinition) bool {
 		_, ok := bean.getInstance().(ApplicationFailedListener)
 		return ok
-	}, func(bean BeanDefinition) int {
-		return 0
-	}, func(bean BeanDefinition) {
-		defer err.Recover(func(e any) {
-			slog.Error(fmt.Sprintf("Notification processing failed for bean %v. %s", bean, err.PrintStackTrace(e)))
-		})
-		bean.getInstance().(ApplicationFailedListener).OnApplicationFailed()
 	})
+	for _, bean := range orderedBeans {
+		this.notifyApplicationFailedListener(bean.(ApplicationFailedListener))
+	}
 }
 
-func (this *ApplicationContext) foreachBean(beans []BeanDefinition, filter func(b BeanDefinition) bool, order func(b BeanDefinition) int, do func(BeanDefinition)) {
-	filtered := make([]BeanDefinition, 0)
+func (this *ApplicationContext) notifyApplicationFailedListener(bean ApplicationFailedListener) {
+	defer err.Recover(func(e any) {
+		slog.Error(fmt.Sprintf("Notify failed for bean %v. %s", bean, err.PrintStackTrace(e)))
+	})
+	bean.OnApplicationFailed()
+}
+
+func (this *ApplicationContext) foreachBeanDefinition(beans []BeanDefinition, filter func(b BeanDefinition) bool, do func(BeanDefinition)) {
 	for _, bean := range beans {
 		if filter(bean) {
-			filtered = append(filtered, bean)
+			do(bean)
 		}
-	}
-	sort.SliceStable(filtered, func(i, j int) bool {
-		return order(filtered[i]) < order(filtered[j])
-	})
-	for _, bean := range filtered {
-		do(bean)
 	}
 }

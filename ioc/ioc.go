@@ -53,10 +53,13 @@ func Bean[T any]() *BeanDefinitionImpl[T] {
 	return newBeanDefinition[T]()
 }
 
-// Resolve bean by type and (optionaly) name
+// Resolve bean by type and (optionaly) name. Provide 'optional' as a second argument not to fail in case of a bean is not registered
 func Resolve[T any](name ...string) Provider[T] {
-	lang.Assert(len(name) <= 1, "Optional bean name expected")
-	if len(name) == 1 {
+	lang.Assert(len(name) <= 2, "Bean name and 'optional' expected")
+	if len(name) == 2 {
+		lang.Assert(name[1] == Optional, "Unsupported option '%s'", name[1])
+		return newInjectQualifier[T]().Name(name[0]).Optional().resolve()
+	} else if len(name) == 1 {
 		return newInjectQualifier[T]().Name(name[0]).resolve()
 	}
 	return newInjectQualifier[T]().resolve()

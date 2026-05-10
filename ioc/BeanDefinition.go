@@ -125,13 +125,12 @@ func (this *BeanDefinitionImpl[T]) Phase(phase int) *BeanDefinitionImpl[T] {
 	return this
 }
 
-// Order for ApplicationRunner beans. Default: math.MaxInt
+// Order for slices and ApplicationRunner beans. Default: math.MaxInt
 //
 // lower order - executes first
 //
 // higher order - executes later
 func (this *BeanDefinitionImpl[T]) Order(order int) *BeanDefinitionImpl[T] {
-	lang.Assert(this.isApplicationRunner(), "Order may be applied only to ApplicationRunner")
 	lang.Assert(this.order == nil, "Order is defined twice")
 	this.order = &order
 	return this

@@ -277,7 +277,7 @@ func (this *BeanDefinitionImpl[T]) getMutex() *sync.Mutex {
 
 // Implements String
 func (this *BeanDefinitionImpl[T]) String() string {
-	return fmt.Sprintf("%s[%s%s%s%s%s]", this.t,
+	return fmt.Sprintf("%s [%s%s%s%s%s]", this.t,
 		lang.If(this.scope == Singleton, "singleton", "prototype"),
 		lang.If(this.primary, " primary", ""),
 		lang.If(this.isLifecycleBean(), " Lifecycle", ""),

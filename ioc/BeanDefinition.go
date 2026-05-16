@@ -78,7 +78,7 @@ func (this *BeanDefinitionImpl[T]) Scope(scope string) *BeanDefinitionImpl[T] {
 	case "prototype":
 		this.scope = Prototype
 	default:
-		panic(fmt.Sprintf("%s scope not supported", scope))
+		panic(err.NewIllegalArgumentException(fmt.Sprintf("%s scope not supported", scope)))
 	}
 	return this
 }

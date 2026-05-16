@@ -8,9 +8,14 @@ Lightweight, inversion of control implementation inspired by Spring, made for Go
 
 ## Using the Container
 
-The `ApplicationContext` is the service for an advanced factory capable of maintaining a registry of different beans and their dependencies. Use `inject` field tag for bean dependencies.
+The `ApplicationContext` is the service for an advanced factory capable of maintaining a registry of beans and their dependencies.  
+For container-managed beans, use the `inject` field tag for dependencies:
 
     service type `inject:"optionalName"`
+
+For non-container-managed objects:
+
+    var service = ioc.Resolve[type]("optionalName")
 
 ## Bean Overview
 
@@ -111,7 +116,7 @@ To put it another way, when you define a bean definition and it is scoped as a s
 
 ### The Prototype Scope
 
-The non-singleton prototype scope of bean deployment results in the creation of a new bean instance every time a request for that specific bean is made. That is, the bean is injected into another bean or you request it through an `ioc.Inject()` method call on the container. You may want to use the prototype scope for some stateful beans but note that `PreDestroy(method)` is called for `singleton` beans only for `ioc.Close()`.
+The non-singleton prototype scope of bean deployment results in the creation of a new bean instance every time a request for that specific bean is made. That is, the bean is injected into another bean or you request it through an `ioc.Resolve()` method call on the container. You may want to use the prototype scope for some stateful beans but note that `PreDestroy(method)` is called for `singleton` beans only for `ioc.Close()`.
 
 ### Lifecycle Callbacks
 

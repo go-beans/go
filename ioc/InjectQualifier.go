@@ -9,9 +9,10 @@ import (
 )
 
 type InjectQualifier[T any] struct {
-	t        reflect.Type
-	name     string
-	optional bool
+	fieldName string
+	t         reflect.Type
+	name      string
+	optional  bool
 }
 
 func newInjectQualifier[T any]() *InjectQualifier[T] {
@@ -29,25 +30,43 @@ func (this *InjectQualifier[T]) Optional() *InjectQualifier[T] {
 	return this
 }
 
-func (this *InjectQualifier[T]) resolve() func() T {
-	var once sync.Once
+func (this *InjectQualifier[T]) resolveOrExit() func() T {
 	var instance T
+	var once sync.Once
 	return func() T {
 		once.Do(func() {
 			defer err.Recover(func(e any) {
-				applicationContextInstance().doExitPrintStackTrace(e, "Cannot resolve dependency.")
+				applicationContextInstance().doExitPrintStackTrace(e, "Cannot resolve bean.")
 			})
-			raw := applicationContextInstance().Bean(&InjectQualifier[any]{
-				t:        this.t,
-				name:     this.name,
-				optional: this.optional,
-			})
-			if raw != nil {
-				val, ok := raw.(T)
-				lang.Assert(ok, "Cannot cast bean to expected type %v; got %T", this.t, raw)
-				instance = val
-			}
+			instance = this.doResolve()
 		})
 		return instance
 	}
+}
+
+func (this *InjectQualifier[T]) resolve() func() T {
+	var instance T
+	var once sync.Once
+	return func() T {
+		once.Do(func() {
+			instance = this.doResolve()
+		})
+		return instance
+	}
+}
+
+func (this *InjectQualifier[T]) doResolve() T {
+	var instance T
+	raw := applicationContextInstance().Bean(&InjectQualifier[any]{
+		fieldName: this.fieldName,
+		t:         this.t,
+		name:      this.name,
+		optional:  this.optional,
+	})
+	if raw != nil {
+		val, ok := raw.(T)
+		lang.Assert(ok, "Cannot cast bean to expected type %v; got %T", this.t, raw)
+		instance = val
+	}
+	return instance
 }

@@ -78,6 +78,13 @@ func (this *ApplicationContext) Register(bean BeanDefinition) {
 }
 
 func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
+	defer err.Catch(func(e any) {
+		if inject.fieldName == "" {
+			panic(e)
+		} else {
+			panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Cannot inject dependency into field '%s' of type %s", inject.fieldName, inject.t), e))
+		}
+	})
 	if len(inject.name) > 0 {
 		bean, ok := this.named[inject.name]
 		if !ok && inject.optional {
@@ -88,7 +95,7 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 
 	} else if inject.t.Kind() == reflect.Slice {
 		elemType := inject.t.Elem()
-		orderedBeans := this.orderedBeans(this.registered, func(bean BeanDefinition) bool {
+		orderedBeans := this.orderedBeanInstances(this.registered, func(bean BeanDefinition) bool {
 			return this.eligible(bean.getType(), elemType)
 		})
 		result := reflect.MakeSlice(inject.t, 0, 0)
@@ -129,8 +136,8 @@ func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
 }
 
 func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
-	defer err.Recover(func(e any) {
-		this.doExitPrintStackTrace(e, "Could not initialize bean %v.", bean)
+	defer err.Catch(func(e any) {
+		panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Error creating bean %v", bean), e))
 	})
 	for _, name := range bean.getDependsOn() {
 		bean, ok := this.named[name]
@@ -254,7 +261,7 @@ func (this *ApplicationContext) phaseToLifecycleBeans(beans []BeanDefinition) ma
 	return phaseToBeans
 }
 
-func (this *ApplicationContext) orderedBeans(beans []BeanDefinition, filter func(b BeanDefinition) bool) []any {
+func (this *ApplicationContext) orderedBeanInstances(beans []BeanDefinition, filter func(b BeanDefinition) bool) []any {
 	orderToBeans := make(map[int][]any)
 	this.foreachBeanDefinition(beans, filter,
 		func(bean BeanDefinition) {
@@ -280,14 +287,14 @@ func (this *ApplicationContext) orderedBeans(beans []BeanDefinition, filter func
 	sort.Ints(sortedOrder)
 
 	orderedBeans := make([]any, 0)
-	for _, phase := range sortedOrder {
-		orderedBeans = append(orderedBeans, orderToBeans[phase]...)
+	for _, order := range sortedOrder {
+		orderedBeans = append(orderedBeans, orderToBeans[order]...)
 	}
 	return orderedBeans
 }
 
 func (this *ApplicationContext) notifyContextRefreshed() {
-	orderedBeans := this.orderedBeans(this.instantiated, func(bean BeanDefinition) bool {
+	orderedBeans := this.orderedBeanInstances(this.instantiated, func(bean BeanDefinition) bool {
 		_, ok := bean.getInstance().(ContextRefreshedListener)
 		return ok
 	})
@@ -310,7 +317,7 @@ func (this *ApplicationContext) Run() {
 }
 
 func (this *ApplicationContext) executeApplicationRunnerBeans() {
-	orderedBeans := this.orderedBeans(this.registered, func(bean BeanDefinition) bool {
+	orderedBeans := this.orderedBeanInstances(this.registered, func(bean BeanDefinition) bool {
 		return bean.isApplicationRunner()
 	})
 	for _, bean := range orderedBeans {
@@ -319,7 +326,7 @@ func (this *ApplicationContext) executeApplicationRunnerBeans() {
 }
 
 func (this *ApplicationContext) notifyApplicationReady() {
-	orderedBeans := this.orderedBeans(this.instantiated, func(bean BeanDefinition) bool {
+	orderedBeans := this.orderedBeanInstances(this.instantiated, func(bean BeanDefinition) bool {
 		_, ok := bean.getInstance().(ApplicationReadyListener)
 		return ok
 	})
@@ -398,7 +405,7 @@ func (this *ApplicationContext) destroyBeans() {
 }
 
 func (this *ApplicationContext) notifyApplicationFailed() {
-	orderedBeans := this.orderedBeans(this.instantiated, func(bean BeanDefinition) bool {
+	orderedBeans := this.orderedBeanInstances(this.instantiated, func(bean BeanDefinition) bool {
 		_, ok := bean.getInstance().(ApplicationFailedListener)
 		return ok
 	})

@@ -58,11 +58,11 @@ func Resolve[T any](name ...string) Provider[T] {
 	lang.Assert(len(name) <= 2, "Bean name and 'optional' expected")
 	if len(name) == 2 {
 		lang.Assert(name[1] == Optional, "Unsupported option '%s'", name[1])
-		return newInjectQualifier[T]().Name(name[0]).Optional().resolve()
+		return newInjectQualifier[T]().Name(name[0]).Optional().resolveOrExit()
 	} else if len(name) == 1 {
-		return newInjectQualifier[T]().Name(name[0]).resolve()
+		return newInjectQualifier[T]().Name(name[0]).resolveOrExit()
 	}
-	return newInjectQualifier[T]().resolve()
+	return newInjectQualifier[T]().resolveOrExit()
 }
 
 // InjectBeans injects matching beans into fields tagged with `inject:""`.
@@ -76,9 +76,10 @@ func injectBeansAny(target any) any {
 	reflects.ForEachTaggedField(target, InjectTag, func(field reflects.Field) {
 		name, optional := parseInjectTag(field)
 		qualifier := InjectQualifier[any]{
-			t:        field.Type,
-			name:     name,
-			optional: optional,
+			fieldName: field.Field.Name,
+			t:         field.Type,
+			name:      name,
+			optional:  optional,
 		}
 		bean := qualifier.resolve()()
 		if bean != nil {

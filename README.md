@@ -38,6 +38,7 @@ ioc.Bean[type]().
     Factory(method).
     PostConstruct(method).
     PreDestroy(method).
+    ApplicationListener(method).
     Register()
 ```
 
@@ -156,6 +157,132 @@ The non-singleton prototype scope of bean deployment results in the creation of 
 The container calls `PostConstruct(method)` after bean instantiation and lets a bean perform initialization work after the container has set all necessary properties on the bean. `PreDestroy(method)` lets a bean get a callback when the container that contains it is destroyed before graceful shutdown.
 
 > Be aware that `PostConstruct` and initialization methods in general are executed within the container’s singleton creation lock. The bean instance is only considered as fully initialized and ready to be published to others after returning from the `PostConstruct` method. Such individual initialization methods are only meant for validating the configuration state and possibly preparing some data structures based on the given configuration but no further activity with external bean access.
+
+## Application Lifecycle
+
+The `ApplicationContext` manages the complete lifecycle of beans and application events.
+
+### Startup Sequence
+
+```text
+0. Bean registration
+   Bean definitions are registered in the ApplicationContext.
+
+Refresh phase:
+
+1. Bean instantiation
+   Non-lazy singleton beans are created.
+
+2. Aware callbacks
+   BeanNameAware, EnvironmentAware, ApplicationContextAware, ...
+
+3. Configuration and dependency injection
+   value tags, inject tags, configuration binding.
+
+4. PostConstruct
+   Custom post-construct callback is invoked.
+
+5. InitializingBean.AfterPropertiesSet()
+   Bean receives final initialization callback.
+
+6. Lifecycle.Start()
+   Lifecycle beans are started by phase.
+
+7. ContextRefreshedEvent
+   The context has been refreshed.
+
+Run phase:
+
+8. ApplicationStartedEvent
+   Application has started, before runners.
+
+9. ApplicationRunner.Run()
+   Application runners are executed by order.
+
+10a. ApplicationReadyEvent
+    Application is ready to serve.
+
+10b. ApplicationFailedEvent
+     Startup failed.
+```
+
+### Shutdown Sequence
+
+```text
+11. ContextClosedEvent
+    Context shutdown has been requested.
+
+12. Lifecycle.Stop()
+    Started lifecycle beans are stopped in reverse phase order.
+
+13. PreDestroy
+    Custom pre-destroy callback is invoked.
+
+14. DisposableBean.Destroy()
+    Bean receives final destroy callback.
+```
+
+### Built-in Application Events
+
+| Event                     | Description                                                                                                                                                                                                                                                                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ContextRefreshedEvent`   | Published when the `ApplicationContext` is initialized or refreshed by calling `Refresh()`. At this stage, all non-lazy singleton beans are instantiated, dependencies are injected, initialization callbacks are completed, and `Lifecycle` beans are started. The context is fully initialized and ready for use.              |
+| `ApplicationStartedEvent` | Published when the application startup sequence begins after the context has been refreshed and before `ApplicationRunner` beans are executed.                                                                                                                                                                                   |
+| `ApplicationReadyEvent`   | Published after all `ApplicationRunner` beans have completed. At this stage, the application is considered ready to serve requests and report readiness.                                                                                                                                                                         |
+| `ApplicationFailedEvent`  | Published when application startup fails with an unrecovered error.                                                                                                                                                                                                                                                              |
+| `ContextStartedEvent`     | Published when the `ApplicationContext` is explicitly started by calling `Start()`. Here, "started" means that all `Lifecycle` beans receive an explicit start signal. Typically, this event is used when restarting components after a previous `Stop()` call.                                                                  |
+| `ContextStoppedEvent`     | Published when the `ApplicationContext` is explicitly stopped by calling `Stop()`. Here, "stopped" means that all started `Lifecycle` beans receive an explicit stop signal. A stopped context may later be restarted through `Start()`.                                                                                         |
+| `ContextClosedEvent`      | Published when the `ApplicationContext` is being closed by calling `Close()`. At this stage, the application shutdown sequence begins, `Lifecycle` beans are about to be stopped, and singleton beans are about to be destroyed. Once closed, the context reaches the end of its lifecycle and cannot be refreshed or restarted. |
+
+### Listening for Application Events
+
+```go
+type UserService struct{}
+
+func (this *UserService) OnApplicationReady(event *ioc.ApplicationReadyEvent) {
+	slog.Info("application ready")
+}
+
+ioc.Bean[*UserService]().
+	Factory(NewUserService).
+	ApplicationListener((*UserService).OnApplicationReady).
+	Register()
+```
+
+### Publishing Application Events
+
+```go
+type UserCreatedEvent struct {
+	UserID int64
+}
+```
+
+```go
+func (this *Service1) OnUserCreatedEvent(event *UserCreatedEvent) {
+	slog.Info(fmt.Sprintf("Service1: %v", event))
+}
+```
+
+```go
+type Service2 struct {
+	ctx *ioc.ApplicationContext
+}
+
+func (this *Service2) SetApplicationContext(ctx *ioc.ApplicationContext) {
+	this.ctx = ctx
+}
+
+func (this *Service2) SomeMethod() {
+    this.ctx.PublishEvent(&UserCreatedEvent{UserID: 123})
+}
+```
+
+### Event Ordering
+
+Application listeners are invoked according to bean ordering semantics:
+
+- `Order(...)`
+- `Ordered`
 
 ## Environment Abstraction
 

@@ -44,24 +44,26 @@ type BeanDefinition interface {
 	preDestroyEligible() bool
 	preDestroy()
 	getMutex() *sync.Mutex
+	getApplicationListenerMethods(eventType reflect.Type) []applicationListenerMethod
 	String() string
 }
 
 type BeanDefinitionImpl[T any] struct {
-	scope               Scope
-	t                   reflect.Type
-	names               []string
-	primary             bool
-	lazy                bool
-	dependsOn           []string
-	phase               *int
-	order               *int
-	profiles            []string
-	factoryMethod       func() T
-	postConstructMethod func(T)
-	preDestroyMethod    func(T)
-	instance            any
-	mutex               sync.Mutex
+	scope                      Scope
+	t                          reflect.Type
+	names                      []string
+	primary                    bool
+	lazy                       bool
+	dependsOn                  []string
+	phase                      *int
+	order                      *int
+	profiles                   []string
+	factoryMethod              func() T
+	postConstructMethod        func(T)
+	preDestroyMethod           func(T)
+	instance                   any
+	mutex                      sync.Mutex
+	applicationListenerMethods []applicationListenerMethod
 }
 
 func newBeanDefinition[T any]() *BeanDefinitionImpl[T] {
@@ -140,6 +142,27 @@ func (this *BeanDefinitionImpl[T]) Order(order int) *BeanDefinitionImpl[T] {
 func (this *BeanDefinitionImpl[T]) Profile(profileExpr ...string) *BeanDefinitionImpl[T] {
 	lang.Assert(this.profiles == nil, "Profile is defined twice")
 	this.profiles = profileExpr
+	return this
+}
+
+func (this *BeanDefinitionImpl[T]) ApplicationListener(method any) *BeanDefinitionImpl[T] {
+	methodValue := reflect.ValueOf(method)
+	methodType := methodValue.Type()
+
+	lang.Assert(methodType.Kind() == reflect.Func, "ApplicationListener must be a method reference")
+	lang.Assert(methodType.NumIn() == 2, "ApplicationListener method must have receiver and one event argument")
+	lang.Assert(methodType.NumOut() == 0, "ApplicationListener method must not return values")
+
+	receiverType := methodType.In(0)
+	eventType := methodType.In(1)
+
+	lang.Assert(receiverType == this.t, "ApplicationListener receiver %s does not match bean type %s", receiverType, this.t)
+
+	this.applicationListenerMethods = append(this.applicationListenerMethods, applicationListenerMethod{
+		eventType: eventType,
+		method:    methodValue,
+	})
+
 	return this
 }
 
@@ -234,6 +257,9 @@ func (this *BeanDefinitionImpl[T]) instantiate() any {
 	if bean, ok := obj.(EnvironmentAware); ok {
 		bean.SetEnvironment(env.Instance())
 	}
+	if bean, ok := obj.(ApplicationContextAware); ok {
+		bean.SetApplicationContext(applicationContextInstance())
+	}
 	value := reflect.ValueOf(instance)
 	if value.Kind() == reflect.Pointer && !value.IsNil() && value.Elem().Kind() == reflect.Struct {
 		env.BindPropertiesAny(instance)
@@ -275,6 +301,16 @@ func (this *BeanDefinitionImpl[T]) getMutex() *sync.Mutex {
 	return &this.mutex
 }
 
+func (this *BeanDefinitionImpl[T]) getApplicationListenerMethods(eventType reflect.Type) []applicationListenerMethod {
+	methods := make([]applicationListenerMethod, 0)
+	for _, listener := range this.applicationListenerMethods {
+		if eventType.AssignableTo(listener.eventType) {
+			methods = append(methods, listener)
+		}
+	}
+	return methods
+}
+
 // Implements String
 func (this *BeanDefinitionImpl[T]) String() string {
 	return fmt.Sprintf("%s [%s%s%s%s%s%s]", this.t,
@@ -284,4 +320,13 @@ func (this *BeanDefinitionImpl[T]) String() string {
 		lang.If(this.lazy, " lazy", ""),
 		lang.If(this.isLifecycleBean(), " Lifecycle", ""),
 		lang.If(this.isApplicationRunner(), " ApplicationRunner", ""))
+}
+
+type applicationListenerMethod struct {
+	eventType reflect.Type
+	method    reflect.Value
+}
+
+func (this applicationListenerMethod) invoke(bean any, event reflect.Value) {
+	this.method.Call([]reflect.Value{reflect.ValueOf(bean), event})
 }

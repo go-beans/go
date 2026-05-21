@@ -25,16 +25,17 @@ var applicationContext atomic.Pointer[ApplicationContext]
 var applicationContextMu sync.Mutex
 
 type ApplicationContext struct {
-	context       context.Context
-	cancel        context.CancelFunc
-	registered    []BeanDefinition
-	instantiated  []BeanDefinition
-	started       []BeanDefinition
-	beans         map[reflect.Type][]BeanDefinition
-	named         map[string]BeanDefinition
-	refreshed     atomic.Bool
-	startTime     time.Time
-	servicesCount atomic.Int32
+	context                   context.Context
+	cancel                    context.CancelFunc
+	registered                []BeanDefinition
+	instantiated              []BeanDefinition
+	started                   []BeanDefinition
+	beans                     map[reflect.Type][]BeanDefinition
+	named                     map[string]BeanDefinition
+	applicationListenersCache map[reflect.Type][]applicationListener
+	refreshed                 atomic.Bool
+	startTime                 time.Time
+	servicesCount             atomic.Int32
 }
 
 func applicationContextInstance() *ApplicationContext {
@@ -52,13 +53,14 @@ func newApplicationContext() *ApplicationContext {
 	slog.Info(fmt.Sprintf("ioc.ApplicationContext: starting with PID %d", os.Getpid()))
 	context, cancel := context.WithCancel(context.Background())
 	return &ApplicationContext{
-		context:      context,
-		cancel:       cancel,
-		registered:   make([]BeanDefinition, 0),
-		instantiated: make([]BeanDefinition, 0),
-		beans:        make(map[reflect.Type][]BeanDefinition),
-		named:        make(map[string]BeanDefinition),
-		startTime:    time.Now(),
+		context:                   context,
+		cancel:                    cancel,
+		registered:                make([]BeanDefinition, 0),
+		instantiated:              make([]BeanDefinition, 0),
+		beans:                     make(map[reflect.Type][]BeanDefinition),
+		named:                     make(map[string]BeanDefinition),
+		applicationListenersCache: make(map[reflect.Type][]applicationListener),
+		startTime:                 time.Now(),
 	}
 }
 
@@ -151,6 +153,7 @@ func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
 					this.servicesCount.Add(1)
 					bean.instantiate()
 					this.instantiated = append(this.instantiated, bean)
+					this.applicationListenersCache = make(map[reflect.Type][]applicationListener)
 				}
 			})
 		}
@@ -193,7 +196,7 @@ func (this *ApplicationContext) Refresh() {
 	this.refreshed.Store(true)
 
 	slog.Info(fmt.Sprintf("ioc.ApplicationContext: context refreshed in %v", time.Since(threshold)))
-	this.notifyContextRefreshed()
+	this.PublishEvent(NewContextRefreshedEvent(this))
 }
 
 func (this *ApplicationContext) initializeBeans() {
@@ -293,27 +296,18 @@ func (this *ApplicationContext) orderedBeanInstances(beans []BeanDefinition, fil
 	return orderedBeans
 }
 
-func (this *ApplicationContext) notifyContextRefreshed() {
-	orderedBeans := this.orderedBeanInstances(this.instantiated, func(bean BeanDefinition) bool {
-		_, ok := bean.getInstance().(ContextRefreshedListener)
-		return ok
-	})
-	for _, bean := range orderedBeans {
-		bean.(ContextRefreshedListener).OnContextRefreshed()
-	}
-}
-
 func (this *ApplicationContext) Run() {
 	defer err.Recover(func(e any) {
-		this.notifyApplicationFailed()
+		this.publishEvent(NewApplicationFailedEvent(e), true)
 		this.doExitPrintStackTrace(e, "Context run failed.")
 	})
 
 	if !this.refreshed.Load() {
 		this.Refresh()
 	}
+	this.PublishEvent(NewApplicationStartedEvent())
 	this.executeApplicationRunnerBeans()
-	this.notifyApplicationReady()
+	this.PublishEvent(NewApplicationReadyEvent(time.Since(this.startTime)))
 }
 
 func (this *ApplicationContext) executeApplicationRunnerBeans() {
@@ -325,21 +319,12 @@ func (this *ApplicationContext) executeApplicationRunnerBeans() {
 	}
 }
 
-func (this *ApplicationContext) notifyApplicationReady() {
-	orderedBeans := this.orderedBeanInstances(this.instantiated, func(bean BeanDefinition) bool {
-		_, ok := bean.getInstance().(ApplicationReadyListener)
-		return ok
-	})
-	for _, bean := range orderedBeans {
-		bean.(ApplicationReadyListener).OnApplicationReady()
-	}
-}
-
 func (this *ApplicationContext) Close() {
 	concurrent.Synchronized(&applicationContextMu, func() {
 		if applicationContext.CompareAndSwap(this, nil) {
 			theshold := time.Now()
 			slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d running services", this.servicesCount.Load()))
+			this.publishEvent(NewContextClosedEvent(), true)
 
 			this.cancel()
 
@@ -367,11 +352,26 @@ func (this *ApplicationContext) doExitPrintStackTrace(e any, format string, a ..
 	}
 }
 
+func (this *ApplicationContext) Start() {
+	if len(this.started) == 0 {
+		this.startLifecycleBeans()
+	}
+	this.PublishEvent(NewContextStartedEvent())
+}
+
+func (this *ApplicationContext) Stop() {
+	if len(this.started) > 0 {
+		this.stopLifecycleBeans()
+	}
+	this.publishEvent(NewContextStoppedEvent(), true)
+}
+
 func (this *ApplicationContext) stopLifecycleBeans() {
 	executor := con.NewExecutor[BeanDefinition](runtime.NumCPU())
 	defer executor.Close()
 
 	phaseToBeans := this.phaseToLifecycleBeans(this.started)
+	this.started = nil
 	sortedPhases := make([]int, 0, len(phaseToBeans))
 	for phase := range phaseToBeans {
 		sortedPhases = append(sortedPhases, phase)
@@ -404,21 +404,66 @@ func (this *ApplicationContext) destroyBeans() {
 		})
 }
 
-func (this *ApplicationContext) notifyApplicationFailed() {
-	orderedBeans := this.orderedBeanInstances(this.instantiated, func(bean BeanDefinition) bool {
-		_, ok := bean.getInstance().(ApplicationFailedListener)
-		return ok
-	})
-	for _, bean := range orderedBeans {
-		this.notifyApplicationFailedListener(bean.(ApplicationFailedListener))
+func (this *ApplicationContext) PublishEvent(event any) {
+	this.publishEvent(event, false)
+}
+
+func (this *ApplicationContext) publishEvent(event any, recoverPanic bool) {
+	eventType := reflect.TypeOf(event)
+	eventValue := reflect.ValueOf(event)
+	listeners := this.applicationListeners(eventType)
+	for _, listener := range listeners {
+		if recoverPanic {
+			this.notifyApplicationEventListener(listener.beanDefinition, listener.instance, listener.method, eventValue)
+		} else {
+			listener.method.invoke(listener.instance, eventValue)
+		}
 	}
 }
 
-func (this *ApplicationContext) notifyApplicationFailedListener(bean ApplicationFailedListener) {
+func (this *ApplicationContext) notifyApplicationEventListener(bean BeanDefinition, instance any, method applicationListenerMethod, eventValue reflect.Value) {
 	defer err.Recover(func(e any) {
 		slog.Error(fmt.Sprintf("Notify failed for bean %v. %s", bean, err.PrintStackTrace(e)))
 	})
-	bean.OnApplicationFailed()
+	method.invoke(instance, eventValue)
+}
+
+func (this *ApplicationContext) applicationListeners(eventType reflect.Type) []applicationListener {
+	listeners, ok := this.applicationListenersCache[eventType]
+	if ok {
+		return listeners
+	}
+
+	listeners = this.resolveApplicationListeners(eventType)
+	this.applicationListenersCache[eventType] = listeners
+	return listeners
+}
+
+func (this *ApplicationContext) resolveApplicationListeners(eventType reflect.Type) []applicationListener {
+	listenerMethodsByBean := make(map[any][]applicationListenerMethod)
+	definitionByBean := make(map[any]BeanDefinition)
+
+	orderedBeans := this.orderedBeanInstances(this.instantiated, func(bean BeanDefinition) bool {
+		instance := bean.getInstance()
+		methods := bean.getApplicationListenerMethods(eventType)
+		definitionByBean[instance] = bean
+		listenerMethodsByBean[instance] = methods
+		return len(methods) > 0
+	})
+
+	listeners := make([]applicationListener, 0)
+
+	for _, instance := range orderedBeans {
+		for _, method := range listenerMethodsByBean[instance] {
+			listeners = append(listeners, applicationListener{
+				beanDefinition: definitionByBean[instance],
+				instance:       instance,
+				method:         method,
+			})
+		}
+	}
+
+	return listeners
 }
 
 func (this *ApplicationContext) foreachBeanDefinition(beans []BeanDefinition, filter func(b BeanDefinition) bool, do func(BeanDefinition)) {
@@ -427,4 +472,10 @@ func (this *ApplicationContext) foreachBeanDefinition(beans []BeanDefinition, fi
 			do(bean)
 		}
 	}
+}
+
+type applicationListener struct {
+	beanDefinition BeanDefinition
+	instance       any
+	method         applicationListenerMethod
 }

@@ -1,32 +1,60 @@
-// 0. Bean registration
+// Application lifecycle overview
 //
-// 1. Bean instantiation
+//  0. Bean registration
+//     Bean definitions are registered in the ApplicationContext.
 //
-// 2. Dependency injection
+// Refresh phase:
 //
-// 3. Aware callbacks
+//  1. Bean instantiation
+//     Non-lazy singleton beans are created.
 //
-// 4. PostConstruct
+//  2. Aware callbacks
+//     BeanNameAware, EnvironmentAware, ApplicationContextAware, ...
 //
-// 5. InitializingBean.AfterPropertiesSet()
+//  3. Configuration and dependency injection
+//     value tags, inject tags, configuration binding.
 //
-// 6. Lfecycle.Start()
+//  4. PostConstruct
+//     Custom post-construct callback is invoked.
 //
-// 7. ContextRefreshedEvent
+//  5. InitializingBean.AfterPropertiesSet()
+//     Bean receives final initialization callback.
 //
-// 8. ApplicationRunner.Run()
+//  6. Lifecycle.Start()
+//     Lifecycle beans are started by phase.
 //
-// 9. ApplicationReadyEvent / ApplicationFailedEvent
+//  7. ContextRefreshedEvent
+//     The context has been refreshed.
 //
-// # APPLICATION RUNNING
+// Run phase:
 //
-// 10. ContextClosedEvent
+//  8. ApplicationStartedEvent
+//     Application has started, before runners.
 //
-// 11. Lfecycle.Stop()
+//  9. ApplicationRunner.Run()
+//     Application runners are executed by order.
 //
-// 12. PreDestroy
+//  10. a) ApplicationReadyEvent
+//     Application is ready to serve.
 //
-// 13. DisposableBean.Destroy()
+//  10. b) ApplicationFailedEvent
+//     Startup failed.
+//
+// # Application running
+//
+// Close phase:
+//
+//  11. ContextClosedEvent
+//     Context shutdown has been requested.
+//
+//  12. Lifecycle.Stop()
+//     Started lifecycle beans are stopped in reverse phase order.
+//
+//  13. PreDestroy
+//     Custom pre-destroy callback is invoked.
+//
+//  14. DisposableBean.Destroy()
+//     Bean receives final destroy callback.
 package ioc
 
 import (

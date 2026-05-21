@@ -222,6 +222,10 @@ Run phase:
     Bean receives final destroy callback.
 ```
 
+## Application Events
+
+`go-beans` provides support for application events and listeners.
+
 ### Built-in Application Events
 
 | Event                     | Description                                                                                                                                                                                                                                                                                                                      |
@@ -236,20 +240,25 @@ Run phase:
 
 ### Listening for Application Events
 
+Register one method (or more) using `.ApplicationListener(...)`
+
 ```go
-type UserService struct{}
-
-func (this *UserService) OnApplicationReady(event *ioc.ApplicationReadyEvent) {
-	slog.Info("application ready")
-}
-
 ioc.Bean[*UserService]().
 	Factory(NewUserService).
 	ApplicationListener((*UserService).OnApplicationReady).
 	Register()
 ```
 
-### Publishing Application Events
+```go
+// Method parameter type will be used to filer eligible events to pass to the consumer
+func (this *UserService) OnApplicationReady(event *ioc.ApplicationReadyEvent) {
+	slog.Info("application ready")
+}
+```
+
+### Publishing Custom Application Events
+
+Any reference or value type may be used as an event.
 
 ```go
 type UserCreatedEvent struct {
@@ -257,17 +266,14 @@ type UserCreatedEvent struct {
 }
 ```
 
-```go
-func (this *Service1) OnUserCreatedEvent(event *UserCreatedEvent) {
-	slog.Info(fmt.Sprintf("Service1: %v", event))
-}
-```
+Publisher service needs `ApplicationContext` to publish events
 
 ```go
 type Service2 struct {
 	ctx *ioc.ApplicationContext
 }
 
+// Implements ApplicationContextAware
 func (this *Service2) SetApplicationContext(ctx *ioc.ApplicationContext) {
 	this.ctx = ctx
 }
@@ -277,9 +283,25 @@ func (this *Service2) SomeMethod() {
 }
 ```
 
+Consumer registration
+
+```go
+ioc.Bean[*app.Service1]().Factory(app.NewService1).
+	ApplicationListener((*app.Service1).OnUserCreatedEvent).
+	Register()
+```
+
+Consumer service will receive _**all**_ type of events which are assignable to `*UserCreatedEvent`
+
+```go
+func (this *Service1) OnUserCreated(event *UserCreatedEvent) {
+	slog.Info(fmt.Sprintf("Service1: %v", event))
+}
+```
+
 ### Event Ordering
 
-Application listeners are invoked according to bean ordering semantics:
+Application events are synchronous notifications. Application listeners are invoked according to bean ordering semantics:
 
 - `Order(...)`
 - `Ordered`

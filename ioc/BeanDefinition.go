@@ -156,7 +156,7 @@ func (this *BeanDefinitionImpl[T]) ApplicationListener(method any) *BeanDefiniti
 	receiverType := methodType.In(0)
 	eventType := methodType.In(1)
 
-	lang.Assert(receiverType == this.t, "ApplicationListener receiver %s does not match bean type %s", receiverType, this.t)
+	lang.Assert(this.t.AssignableTo(receiverType), "ApplicationListener receiver %s does not match bean type %s", receiverType, this.t)
 
 	this.applicationListenerMethods = append(this.applicationListenerMethods, applicationListenerMethod{
 		eventType: eventType,

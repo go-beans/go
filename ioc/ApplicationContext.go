@@ -187,9 +187,12 @@ func (this *ApplicationContext) eligible(registered, requested reflect.Type) boo
 
 func (this *ApplicationContext) Refresh() {
 	defer err.Recover(func(e any) {
-		this.doExitPrintStackTrace(e, "Context refresh failed.")
+		this.doExit(e, "Context refresh failed.")
 	})
+	this.doRefresh()
+}
 
+func (this *ApplicationContext) doRefresh() {
 	threshold := time.Now()
 	this.initializeBeans()
 	this.startLifecycleBeans()
@@ -298,12 +301,14 @@ func (this *ApplicationContext) orderedBeanInstances(beans []BeanDefinition, fil
 
 func (this *ApplicationContext) Run() {
 	defer err.Recover(func(e any) {
-		this.publishEvent(NewApplicationFailedEvent(e), true)
-		this.doExitPrintStackTrace(e, "Context run failed.")
+		if exitCodeError, ok := err.As[*ExitCodeError](e); !ok || exitCodeError.code != 0 {
+			this.publishEvent(NewApplicationFailedEvent(e), true)
+		}
+		this.doExit(e, "Context run failed.")
 	})
 
 	if !this.refreshed.Load() {
-		this.Refresh()
+		this.doRefresh()
 	}
 	this.PublishEvent(NewApplicationStartedEvent())
 	this.executeApplicationRunnerBeans()
@@ -340,9 +345,13 @@ func (this *ApplicationContext) exit(code int, format string, a ...any) {
 	panic(NewExitCodeErrorWith(code, fmt.Sprintf(format, a...), nil, err.StackTrace(2)))
 }
 
-func (this *ApplicationContext) doExitPrintStackTrace(e any, format string, a ...any) {
+func (this *ApplicationContext) doExit(e any, format string, a ...any) {
 	if exitCodeError, ok := err.As[*ExitCodeError](e); ok {
-		slog.Error(err.PrintStackTrace(exitCodeError))
+		if exitCodeError.code == 0 {
+			slog.Info(fmt.Sprint(exitCodeError))
+		} else {
+			slog.Error(err.PrintStackTrace(exitCodeError))
+		}
 		this.Close()
 		os.Exit(exitCodeError.code)
 	} else {

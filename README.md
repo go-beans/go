@@ -221,7 +221,7 @@ Run phase:
 
 go-beans supports both short-running batch applications and long-running applications.
 
-If `ioc.AwaitTermination()` is not used, the application behaves like a batch job: `ioc.Run()` starts the context, executes application runners, publishes lifecycle events, and then the `main` function returns normally. Graceful shutdown happens when `ioc.Close()` is deferred.
+If `ioc.AwaitTermination()` is not used, the application behaves like a batch job: `ioc.Run()` starts the context, executes application runners, publishes lifecycle events, and then the `main` function returns normally. Graceful shutdown still happens when `ioc.Close()` is deferred. `ioc.Close()` publishes `ContextClosedEvent`, stops `Lifecycle` beans, invokes destroy callbacks, and releases the global `ApplicationContext`.
 
 ```go
 func main() {
@@ -230,7 +230,7 @@ func main() {
 }
 ```
 
-For long-running applications, use `ioc.AwaitTermination()` to keep the main goroutine alive until the process receives a termination signal or the application is closed explicitly.
+For long-running applications, use `ioc.AwaitTermination()` to keep the main goroutine alive until the process receives a termination signal or the application is closed explicitly through `ioc.Exit`.
 
 ```go
 func main() {
@@ -240,21 +240,9 @@ func main() {
 }
 ```
 
-A long-running application may stop successfully by closing the context:
+`ioc.Exit` interrupts application execution, unwinds the stack, performs graceful shutdown, and exits the process with the specified code.
 
-```go
-ioc.Close()
-```
-
-This publishes `ContextClosedEvent`, stops `Lifecycle` beans, invokes destroy callbacks, and lets the process exit with code `0`.
-
-If the application must terminate with a specific non-zero exit code, use `ioc.Exit`:
-
-```go
-ioc.Exit(10, "Configuration validation failed")
-```
-
-`ioc.Exit` interrupts application execution, unwinds the stack, publishes `ApplicationFailedEvent`, performs graceful shutdown, and exits the process with the specified code.
+Exit code `0` is treated as normal termination. Non-zero exit codes publish `ApplicationFailedEvent`.
 
 ## Application Events
 

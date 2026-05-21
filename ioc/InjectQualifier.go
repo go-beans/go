@@ -36,7 +36,7 @@ func (this *InjectQualifier[T]) resolveOrExit() func() T {
 	return func() T {
 		once.Do(func() {
 			defer err.Recover(func(e any) {
-				applicationContextInstance().doExitPrintStackTrace(e, "Cannot resolve bean.")
+				applicationContextInstance().doExit(e, "Cannot resolve bean.")
 			})
 			instance = this.doResolve()
 		})

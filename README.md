@@ -108,12 +108,7 @@ func NewMyService() *MyService {
 }
 
 func (this *MyService) Run(args []string) {
-  this.httpClient.Get("http://example.com")
-  ...
-  // ioc.Exit(2, "Something failed: %s", "blah")
-  // panic(ioc.NewExitCodeErrorFrom(5, "Something failed", "Root cause"))
-  // panic(err.NewRuntimeException("Some error"))
-  // panic("Some error")
+  slog.Info(fmt.Sprintf("MyService: %v", this.httpClient.Get("http://example.com")))
 }
 ```
 
@@ -221,6 +216,45 @@ Run phase:
 14. DisposableBean.Destroy()
     Bean receives final destroy callback.
 ```
+
+## Application Termination
+
+go-beans supports both short-running batch applications and long-running applications.
+
+If `ioc.AwaitTermination()` is not used, the application behaves like a batch job: `ioc.Run()` starts the context, executes application runners, publishes lifecycle events, and then the `main` function returns normally. Graceful shutdown happens when `ioc.Close()` is deferred.
+
+```go
+func main() {
+	defer ioc.Close()
+	ioc.Run()
+}
+```
+
+For long-running applications, use `ioc.AwaitTermination()` to keep the main goroutine alive until the process receives a termination signal or the application is closed explicitly.
+
+```go
+func main() {
+	defer ioc.Close()
+	ioc.Run()
+	ioc.AwaitTermination()
+}
+```
+
+A long-running application may stop successfully by closing the context:
+
+```go
+ioc.Close()
+```
+
+This publishes `ContextClosedEvent`, stops `Lifecycle` beans, invokes destroy callbacks, and lets the process exit with code `0`.
+
+If the application must terminate with a specific non-zero exit code, use `ioc.Exit`:
+
+```go
+ioc.Exit(10, "Configuration validation failed")
+```
+
+`ioc.Exit` interrupts application execution, unwinds the stack, publishes `ApplicationFailedEvent`, performs graceful shutdown, and exits the process with the specified code.
 
 ## Application Events
 

@@ -170,6 +170,7 @@ func Close() {
 	applicationContextInstance().Close()
 }
 
+// Graceful shutdown with non-zere exit code
 func Exit(code int, format string, a ...any) {
 	applicationContextInstance().exit(code, format, a...)
 }

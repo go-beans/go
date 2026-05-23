@@ -76,7 +76,27 @@ const Optional = "optional"
 
 type Provider[T any] func() T
 
-// Register bean
+// Bean creates a bean definition builder for the specified bean type.
+//
+// Bean is the primary entry point for registering container-managed beans
+// in the ApplicationContext.
+//
+// Simplest usage:
+//
+//	ioc.Bean[*Service]().Factory(component.NewService).Register()
+//
+// Registered beans participate in dependency injection, lifecycle management,
+// bean post-processing, event delivery, and graceful shutdown handled by the
+// ApplicationContext.
+//
+// Bean names are optional and most beans are resolved by type. Explicit names
+// are typically only required when multiple beans of the same type are
+// registered, for example differently configured executors, clients,
+// or infrastructure components.
+//
+// Additional builder methods allow configuring bean scope, profiles,
+// ordering, lifecycle phase, lazy initialization, dependencies,
+// factory methods, and destruction callbacks.
 func Bean[T any]() *BeanDefinitionImpl[T] {
 	return newBeanDefinition[T]()
 }

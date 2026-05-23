@@ -240,9 +240,16 @@ func main() {
 }
 ```
 
-`ioc.Exit` interrupts application execution, unwinds the stack, performs graceful shutdown, and exits the process with the specified code.
+`ioc.Exit` gracefully closes the current ApplicationContext and terminates
+the process with the specified exit code.  
+`ioc.Exit` never returns.  
+`ioc.Exit` is intended only for exceptional application-wide termination cases,
+for example:
 
-Exit code `0` is treated as normal termination. Non-zero exit codes publish `ApplicationFailedEvent`.
+- fatal unrecoverable conditions requiring a specific process exit code
+- command-line/batch applications returning operational status codes
+- explicit user-triggered application termination (for example GUI "Exit")
+- controlled process termination initiated by infrastructure components
 
 ## Application Events
 

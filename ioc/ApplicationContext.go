@@ -36,6 +36,8 @@ type ApplicationContext struct {
 	refreshed                 atomic.Bool
 	startTime                 time.Time
 	servicesCount             atomic.Int32
+	closing                   atomic.Bool
+	exiting                   atomic.Bool
 }
 
 func applicationContextInstance() *ApplicationContext {
@@ -166,9 +168,9 @@ func (this *ApplicationContext) eligible(registered, requested reflect.Type) boo
 	return registered.AssignableTo(requested)
 }
 
-func (this *ApplicationContext) Refresh() {
+func (this *ApplicationContext) refresh() {
 	defer err.Recover(func(e any) {
-		this.doExit(e, "Context refresh failed.")
+		this.exit1(e, "Context refresh failed.")
 	})
 	this.doRefresh()
 }
@@ -280,12 +282,10 @@ func (this *ApplicationContext) orderedBeanInstances(beans []BeanDefinition, fil
 	return orderedBeans
 }
 
-func (this *ApplicationContext) Run() {
+func (this *ApplicationContext) run() {
 	defer err.Recover(func(e any) {
-		if exitCodeError, ok := err.As[*ExitCodeError](e); !ok || exitCodeError.code != 0 {
-			this.publishEvent(NewApplicationFailedEvent(e), true)
-		}
-		this.doExit(e, "Context run failed.")
+		this.publishEvent(NewApplicationFailedEvent(e), true)
+		this.exit1(e, "Context run failed.")
 	})
 
 	if !this.refreshed.Load() {
@@ -305,41 +305,45 @@ func (this *ApplicationContext) executeApplicationRunnerBeans() {
 	}
 }
 
-func (this *ApplicationContext) Close() {
+func (this *ApplicationContext) close() {
 	concurrent.Synchronized(&applicationContextMu, func() {
-		if applicationContext.CompareAndSwap(this, nil) {
-			theshold := time.Now()
+		if this.closing.CompareAndSwap(false, true) {
+			threshold := time.Now()
 			slog.Info(fmt.Sprintf("ioc.ApplicationContext: closing context with %d running services", this.servicesCount.Load()))
 			this.publishEvent(NewContextClosedEvent(), true)
 
 			this.cancel()
-
 			this.stopLifecycleBeans()
 			this.destroyBeans()
 
-			slog.Info(fmt.Sprintf("ioc.ApplicationContext: context closed in %v, uptime %v", time.Since(theshold), time.Since(this.startTime)))
+			slog.Info(fmt.Sprintf("ioc.ApplicationContext: context closed in %v, uptime %v", time.Since(threshold), time.Since(this.startTime)))
+			applicationContext.CompareAndSwap(this, nil)
 		}
 	})
 }
 
 func (this *ApplicationContext) exit(code int, format string, a ...any) {
-	panic(NewExitCodeErrorWith(code, fmt.Sprintf(format, a...), nil, err.StackTrace(2)))
+	if !this.exiting.CompareAndSwap(false, true) {
+		runtime.Goexit()
+	}
+	message := fmt.Sprintf(format, a...)
+	if code == 0 {
+		slog.Info(message)
+	} else {
+		slog.Error(err.PrintStackTrace(err.NewIllegalStateExceptionWith(message, nil, err.StackTrace(1))))
+	}
+	this.close()
+	os.Exit(code)
 }
 
-func (this *ApplicationContext) doExit(e any, format string, a ...any) {
-	if exitCodeError, ok := err.As[*ExitCodeError](e); ok {
-		if exitCodeError.code == 0 {
-			slog.Info(fmt.Sprint(exitCodeError))
-		} else {
-			slog.Error(err.PrintStackTrace(exitCodeError))
-		}
-		this.Close()
-		os.Exit(exitCodeError.code)
-	} else {
-		slog.Error(fmt.Sprintf("%s %s", fmt.Sprintf(format, a...), err.PrintStackTrace(e)))
-		this.Close()
-		os.Exit(1)
+func (this *ApplicationContext) exit1(e any, format string, a ...any) {
+	if !this.exiting.CompareAndSwap(false, true) {
+		runtime.Goexit()
 	}
+	message := fmt.Sprintf(format, a...)
+	slog.Error(fmt.Sprintf("%s %s", message, err.PrintStackTrace(e)))
+	this.close()
+	os.Exit(1)
 }
 
 func (this *ApplicationContext) Start() {

@@ -81,7 +81,41 @@ func Bean[T any]() *BeanDefinitionImpl[T] {
 	return newBeanDefinition[T]()
 }
 
-// Resolve bean by type and (optionaly) name. Provide 'optional' as a second argument not to fail in case of a bean is not registered
+// Resolve returns a lazy bean provider for the specified bean type and
+// optionally bean name.
+//
+// The returned provider resolves the bean from the current ApplicationContext
+// when invoked:
+//
+//	service := ioc.Resolve[MyService]()
+//	service().Process()
+//
+// Resolve supports lazy on-demand bean creation. Explicit Refresh() is not
+// required for ordinary bean usage because resolving a bean automatically
+// creates the requested bean and all required dependencies.
+//
+// This makes Resolve convenient for:
+//   - non-container-managed objects
+//   - integration tests
+//   - command-line utilities
+//   - one-off service method invocations
+//   - advanced/manual container usage
+//
+// For example:
+//
+//	ioc.Resolve[MyService]()().Process()
+//
+// may be sufficient without starting the full application lifecycle.
+//
+// Refresh() is only required when eager singleton initialization,
+// bean post-processing, lifecycle startup, or application-wide container
+// initialization semantics are needed.
+//
+// By default Resolve fails if the bean cannot be found. Pass optional=true
+// to suppress failure and return the zero value instead.
+//
+// For container-managed beans prefer declarative dependency injection using
+// inject tags instead of Resolve.
 func Resolve[T any](name ...string) Provider[T] {
 	lang.Assert(len(name) <= 2, "Bean name and 'optional' expected")
 	if len(name) == 2 {
@@ -93,8 +127,30 @@ func Resolve[T any](name ...string) Provider[T] {
 	return newInjectQualifier[T]().resolveOrExit()
 }
 
-// InjectBeans injects matching beans into fields tagged with `inject:""`.
-// It is a manual equivalent of container-managed field injection.
+// InjectBeans injects matching beans into struct fields tagged with
+// `inject:""`.
+//
+// InjectBeans is a manual equivalent of container-managed field injection
+// and is primarily intended for tests, utilities, framework integration,
+// or advanced/manual container usage where objects are created outside of
+// the ApplicationContext.
+//
+// Typical usage:
+//
+//	type MyTest struct {
+//		Service MyService `inject:""`
+//	}
+//
+//	func TestSomething(t *testing.T) {
+//		test := &MyTest{}
+//		ioc.InjectBeans(test)
+//
+//		test.Service.Process()
+//	}
+//
+// InjectBeans is not part of the normal application runtime flow.
+// For container-managed application beans prefer ordinary dependency injection
+// performed automatically by the ApplicationContext.
 func InjectBeans[T any](target *T) *T {
 	injectBeansAny(target)
 	return target
@@ -136,45 +192,146 @@ func parseInjectTag(field reflects.Field) (name string, optional bool) {
 	return name, optional
 }
 
-// The returned context's Done channel is closed when AppcilationContext instance is closed and before beans destruction
+// Context returns the root context of the current ApplicationContext.
+//
+// The returned context is cancelled during ApplicationContext shutdown,
+// after ContextClosedEvent is published and before lifecycle beans are
+// stopped and bean destruction callbacks are executed.
+//
+// This allows background workers, listeners, asynchronous processors,
+// schedulers, and long-running operations to react to graceful application
+// shutdown using standard Go context cancellation semantics.
+//
+// Typical usage:
 //
 //	for {
 //		select {
 //		case <-reqContext.Done():
 //			return
+//
 //		case <-ioc.Context().Done():
 //			return
+//
 //		case msg := <-ch:
 //			fmt.Println(msg)
 //		}
 //	}
+//
+// Context is primarily intended for cooperative shutdown of goroutines and
+// infrastructure components managed by the application lifecycle.
 func Context() context.Context {
 	return applicationContextInstance().context
 }
 
-// Refresh application context: instantiate and initialize all non-lazy singeton beans
+// Refresh initializes the current ApplicationContext.
+//
+// Refresh is the low-level container initialization operation, similar to
+// Spring Framework's ApplicationContext refresh phase. It prepares the bean
+// registry, creates required singleton beans, performs dependency injection,
+// applies post-processing, and makes the context ready for use.
+//
+// Refresh does not start the full application runtime contract. In particular,
+// it should not be treated as the application entry point. For normal
+// applications prefer Run(), which performs refresh and then starts lifecycle
+// beans and application runners.
+//
+// Typical use cases for Refresh are advanced/manual container setup,
+// integration tests, or framework-level code that needs an initialized
+// ApplicationContext without starting the whole application.
+//
+// In short:
+//   - Refresh() creates and wires the container.
+//   - Run() starts the application.
 func Refresh() {
-	applicationContextInstance().Refresh()
+	applicationContextInstance().refresh()
 }
 
-// Refresh application context
-// Execute ApplicationRunner(s)
+// Run starts the application.
+//
+// Run is the high-level application entry point, similar to Spring Boot's
+// SpringApplication.run(). It refreshes the ApplicationContext, starts
+// lifecycle beans, invokes application runners, and publishes application
+// lifecycle events.
+//
+// Prefer Run in main functions:
+//
+//	func main() {
+//		defer ioc.Close()
+//		ioc.Run()
+//		ioc.AwaitTermination()
+//	}
+//
+// Run should be used for real applications where the container is expected
+// to manage startup lifecycle, long-running services, background workers,
+// listeners, and application readiness.
+//
+// For tests or advanced scenarios where only bean creation and dependency
+// injection are needed, use Refresh() instead.
 func Run() {
-	applicationContextInstance().Run()
+	applicationContextInstance().run()
 }
 
-// To be used in main to defer resources cleanup
+// Close gracefully shuts down the current ApplicationContext and releases
+// all managed resources.
+//
+// The primary use case is deferred application shutdown in main:
 //
 //	defer ioc.Close()
+//
+// Close is intended to provide finally-block-like semantics for graceful
+// container shutdown, ensuring lifecycle beans are stopped and cleanup
+// callbacks are executed even if application startup or runtime processing
+// fails.
+//
+// Close may also be used in integration tests to fully destroy the current
+// ApplicationContext and recreate a clean container state between test runs.
+//
+// Multiple calls to Close are safe.
 func Close() {
-	applicationContextInstance().Close()
+	applicationContextInstance().close()
 }
 
-// Graceful shutdown with non-zere exit code
+// Exit gracefully closes the current ApplicationContext and terminates
+// the process with the specified exit code.
+//
+// Exit never returns.
+//
+// Exit is intended only for exceptional application-wide termination cases,
+// for example:
+//   - fatal unrecoverable conditions requiring a specific process exit code
+//   - command-line/batch applications returning operational status codes
+//   - explicit user-triggered application termination (for example GUI "Exit")
+//   - controlled process termination initiated by infrastructure components
+//
+// Exit should not be used for ordinary error handling, request processing,
+// business flow control, or local goroutine termination.
+//
+// If another goroutine is already performing application shutdown, Exit
+// terminates only the current goroutine and allows the original shutdown
+// sequence to continue.
 func Exit(code int, format string, a ...any) {
 	applicationContextInstance().exit(code, format, a...)
 }
 
+// AwaitTermination blocks the current goroutine until the
+// ApplicationContext begins shutdown.
+//
+// Run() is a non-blocking operation. The application lifecycle is managed by the
+// ApplicationContext itself, while AwaitTermination is responsible only for
+// preventing the main goroutine from exiting prematurely.
+//
+// Typical usage:
+//
+//	func main() {
+//		defer ioc.Close()
+//		ioc.Run()
+//		ioc.AwaitTermination()
+//	}
+//
+// AwaitTermination is primarily intended for main functions of long-running
+// applications managed by go-beans lifecycle infrastructure.
+//
+// The method returns when application shutdown is initiated.
 func AwaitTermination() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

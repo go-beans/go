@@ -241,8 +241,7 @@ func main() {
 ```
 
 `ioc.Exit` gracefully closes the current ApplicationContext and terminates
-the process with the specified exit code.  
-`ioc.Exit` never returns.  
+the process with the specified exit code. It never returns.  
 `ioc.Exit` is intended only for exceptional application-wide termination cases,
 for example:
 
@@ -253,7 +252,7 @@ for example:
 
 ## Application Events
 
-`go-beans` provides support for application events and listeners.
+go-beans provides support for application events and listeners.
 
 ### Built-in Application Events
 

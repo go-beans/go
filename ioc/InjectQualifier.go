@@ -57,7 +57,7 @@ func (this *InjectQualifier[T]) resolve() func() T {
 
 func (this *InjectQualifier[T]) doResolve() T {
 	var instance T
-	raw := applicationContextInstance().Bean(&InjectQualifier[any]{
+	raw := applicationContextInstance().bean(&InjectQualifier[any]{
 		fieldName: this.fieldName,
 		t:         this.t,
 		name:      this.name,

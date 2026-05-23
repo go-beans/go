@@ -66,7 +66,7 @@ func newApplicationContext() *ApplicationContext {
 	}
 }
 
-func (this *ApplicationContext) Register(bean BeanDefinition) {
+func (this *ApplicationContext) register(bean BeanDefinition) {
 	if env.MatchesProfiles(bean.getProfiles()...) {
 		slog.Debug(fmt.Sprintf("ioc.ApplicationContext: registering %s", bean))
 		if len(bean.getNames()) > 0 {
@@ -81,7 +81,7 @@ func (this *ApplicationContext) Register(bean BeanDefinition) {
 	}
 }
 
-func (this *ApplicationContext) Bean(inject *InjectQualifier[any]) any {
+func (this *ApplicationContext) bean(inject *InjectQualifier[any]) any {
 	defer err.Catch(func(e any) {
 		if inject.fieldName == "" {
 			panic(e)

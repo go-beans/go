@@ -191,7 +191,7 @@ func (this *BeanDefinitionImpl[T]) PreDestroy(f func(T)) *BeanDefinitionImpl[T] 
 // Register the bean within the context
 func (this *BeanDefinitionImpl[T]) Register() {
 	lang.Assert(this.factoryMethod != nil, "Bean factory method must be provided")
-	applicationContextInstance().Register(this)
+	applicationContextInstance().register(this)
 }
 
 func (this *BeanDefinitionImpl[T]) getScope() Scope {

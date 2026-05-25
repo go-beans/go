@@ -98,9 +98,10 @@ project/internal/package/MyService.go:
 
 ```go
 type MyService struct {
-  httpClient  *http.Client  `inject:""`
-  redisClient *redis.Client `inject:""`
-  cron        *cron.Cron    `inject:""`
+  httpClient    *http.Client  `inject:""`
+  redisClient   *redis.Client `inject:""`
+  cron          *cron.Cron    `inject:""`
+  backupPath    string        `value:"${package.backupPath}"`
 }
 
 func NewMyService() *MyService {
@@ -108,7 +109,7 @@ func NewMyService() *MyService {
 }
 
 func (this *MyService) Run(args []string) {
-  slog.Info(fmt.Sprintf("MyService: %v", this.httpClient.Get("http://example.com")))
+  this.httpClient.Get("http://example.com")
 }
 ```
 
@@ -315,7 +316,7 @@ Consumer registration
 
 ```go
 ioc.Bean[*app.Service1]().Factory(app.NewService1).
-	ApplicationListener((*app.Service1).OnUserCreatedEvent).
+	ApplicationListener((*app.Service1).OnUserCreated).
 	Register()
 ```
 
@@ -323,7 +324,7 @@ Consumer service will receive _**all**_ type of events which are assignable to `
 
 ```go
 func (this *Service1) OnUserCreated(event *UserCreatedEvent) {
-	slog.Info(fmt.Sprintf("Service1: %v", event))
+	...
 }
 ```
 

@@ -60,7 +60,7 @@ project/internal/package/context/context.go:
 ```go
 func init() {
   ioc.Bean[*package.ServiceA]().Factory(package.NewServiceA).
-    PostConstruct((*package.ServiceA).Start).Register()
+    PostConstruct((*package.ServiceA).PostConstruct).Register()
 
   ioc.Bean[*package.ServiceB]().Factory(package.NewServiceB).Register()
 
@@ -102,36 +102,39 @@ project/internal/package/ServiceA.go:
 
 ```go
 type ServiceA struct {
-  httpClient  *http.Client  `inject:""`
-  redisClient *redis.Client `inject:""`
-  scheduler   *cron.Cron    `inject:""`
-  serviceB    *ServiceB     `inject:""`
+  httpClient      *http.Client                        `inject:""`
+  redisClient     *redis.Client                       `inject:""`
+  scheduler       *cron.Cron                          `inject:""`
+  serviceB        *ServiceB                           `inject:""`
+  publishExecutor *concurrent.Executor[*redis.IntCmd] `inject:"publishExecutor"`
 
   schedule string `value:"${package.schedule:* * 31 2 *}"`
-  workDir  string `value:"${package.workDir:.}"`
+  workDir  string `value:"${app.workDir:.}"`
 
   cronEntryId cron.EntryID
 }
 
 func NewServiceA() *ServiceA {
-  return env.ConfigurationProperties("package.ServiceA", &ServiceA{})
+  return &ServiceA{}
+  // return env.ConfigurationProperties("package.serviceA", &ServiceA{})
 }
 
 func (this *ServiceA) PostConstruct() {
   err.Assert(os.MkdirAll(this.workDir, 0755), "Cannot create %s", this.workDir)
 }
 
-// implements ioc.Lifecycle
+// Implements ioc.Lifecycle
 func (this *ServiceA) Start() {
   this.cronEntryId = optional.OfCommaErr(this.scheduler.AddJob(this.schedule, this)).OrElsePanic("Failed to schedule ServiceA")
   slog.Info(fmt.Sprintf("Scheduled ServiceA with id %v, next run at %v", this.cronEntryId, this.scheduler.Entry(this.cronEntryId).Next))
 }
 
-// implements ioc.Lifecycle
+// Implements ioc.Lifecycle
 func (this *ServiceA) Stop() {
+  this.scheduler.Remove(this.cronEntryId)
 }
 
-// implements cron.Job
+// Implements cron.Job
 func (this *ServiceA) Run() {
   ...
 }
@@ -296,15 +299,15 @@ go-beans provides support for application events and listeners.
 Register one method (or more) using `.ApplicationListener(...)`
 
 ```go
-ioc.Bean[*UserService]().
-  Factory(NewUserService).
-  ApplicationListener((*UserService).OnApplicationReady).
+ioc.Bean[*ServiceA]().
+  Factory(NewServiceA).
+  ApplicationListener((*ServiceA).OnApplicationReady).
   Register()
 ```
 
 ```go
 // Method parameter type will be used to filer eligible events to pass to the consumer
-func (this *UserService) OnApplicationReady(event *ioc.ApplicationReadyEvent) {
+func (this *ServiceA) OnApplicationReady(event *ioc.ApplicationReadyEvent) {
   slog.Info("application ready")
 }
 ```
@@ -322,16 +325,16 @@ type UserCreatedEvent struct {
 Publisher service needs `ApplicationContext` to publish events
 
 ```go
-type Service2 struct {
+type ServiceB struct {
   ctx *ioc.ApplicationContext
 }
 
 // Implements ApplicationContextAware
-func (this *Service2) SetApplicationContext(ctx *ioc.ApplicationContext) {
+func (this *ServiceB) SetApplicationContext(ctx *ioc.ApplicationContext) {
   this.ctx = ctx
 }
 
-func (this *Service2) SomeMethod() {
+func (this *ServiceB) SomeMethod() {
     this.ctx.PublishEvent(&UserCreatedEvent{UserID: 123})
 }
 ```
@@ -339,15 +342,15 @@ func (this *Service2) SomeMethod() {
 Consumer registration
 
 ```go
-ioc.Bean[*app.Service1]().Factory(app.NewService1).
-  ApplicationListener((*app.Service1).OnUserCreated).
+ioc.Bean[*app.ServiceA]().Factory(app.NewServiceA).
+  ApplicationListener((*app.ServiceA).OnUserCreated).
   Register()
 ```
 
 Consumer service will receive _**all**_ type of events which are assignable to `*UserCreatedEvent`
 
 ```go
-func (this *Service1) OnUserCreated(event *UserCreatedEvent) {
+func (this *ServiceA) OnUserCreated(event *UserCreatedEvent) {
   ...
 }
 ```

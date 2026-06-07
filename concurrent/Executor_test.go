@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-external-config/go/lang"
+	"github.com/go-errr/go/lang"
 )
 
 func TestExecutorWithPanicHandling(t *testing.T) {

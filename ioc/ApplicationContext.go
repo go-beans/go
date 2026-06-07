@@ -15,8 +15,8 @@ import (
 
 	con "github.com/go-beans/go/concurrent"
 	"github.com/go-errr/go/err"
+	"github.com/go-errr/go/lang"
 	"github.com/go-external-config/go/env"
-	"github.com/go-external-config/go/lang"
 	"github.com/go-external-config/go/util/collection"
 	"github.com/go-external-config/go/util/concurrent"
 )

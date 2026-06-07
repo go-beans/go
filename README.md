@@ -51,7 +51,7 @@ This metadata translates to a set of properties that make up each bean definitio
 
 ## Instantiating Beans
 
-A bean definition is essentially a recipe for creating one or more objects. The container looks at the recipe for a named bean when asked and uses the configuration metadata encapsulated by that bean definition to create (or acquire) an actual object. `type` can be pointer to a struct `*MyService` or interface `MyInterface`. `*MyService` implements (can be assigned to) `MyInterface` if methods have a pointer receiver. You can provide `factory` as a reference to `func NewMyService() *MyService` or inline implementation.
+A bean definition is essentially a recipe for creating one or more objects. The container looks at the recipe for a named bean when asked and uses the configuration metadata encapsulated by that bean definition to create (or acquire) an actual object. `type` can be pointer to a struct `*Service` or interface `MyInterface`. `*Service` implements (can be assigned to) `MyInterface` if methods have a pointer receiver. You can provide `factory` as a reference to `func NewService() *Service` or inline implementation.
 
 Dedicate a file a.k.a. _context_ or _configuration_ for bean definitions inside package `init` method. One can reuse configured and ready-to-go services in different parts of application by for importing package where needed and injecting beans.
 
@@ -59,7 +59,11 @@ project/internal/package/context/context.go:
 
 ```go
 func init() {
-  ioc.Bean[*package.MyService]().Factory(package.NewMyService).Register()
+  ioc.Bean[*package.ServiceA]().Factory(package.NewServiceA).
+    PostConstruct((*package.ServiceA).Start).Register()
+
+  ioc.Bean[*package.ServiceB]().Factory(package.NewServiceB).Register()
+
   ioc.Bean[*cron.Cron]().Factory(func() *cron.Cron { return cron.New() }).
     PostConstruct((*cron.Cron).Start).
     PreDestroy(func(c *cron.Cron) { <-c.Stop().Done() }).Register()
@@ -70,16 +74,16 @@ func init() {
   }).PreDestroy((*pgxpool.Pool).Close).Register()
 
   ioc.Bean[*http.Client]().Factory(func() *http.Client {
-    return env.ConfigurationProperties("component.httpClient", env.ConfigurationProperties("httpClient", &http.Client{
-      Transport: env.ConfigurationProperties("component.httpClient.transport", env.ConfigurationProperties("httpClient.transport", &http.Transport{}))}))
+    return env.ConfigurationProperties("package.httpClient", env.ConfigurationProperties("httpClient", &http.Client{
+      Transport: env.ConfigurationProperties("package.httpClient.transport", env.ConfigurationProperties("httpClient.transport", &http.Transport{}))}))
   }).Register()
 
   ioc.Bean[*redis.Client]().Factory(func() *redis.Client {
-    return redis.NewClient(env.ConfigurationProperties("component.redis", env.ConfigurationProperties("redis", &redis.Options{})))
+    return redis.NewClient(env.ConfigurationProperties("package.redis", env.ConfigurationProperties("redis", &redis.Options{})))
   }).PreDestroy(func(c *redis.Client) { c.Close() }).Register()
 
   ioc.Bean[*concurrent.Executor[*redis.IntCmd]]().Name("publishExecutor").Factory(func() *concurrent.Executor[*redis.IntCmd] {
-    return concurrent.NewExecutor[*redis.IntCmd](env.Value[int]("${component.publishParallelism}"))
+    return concurrent.NewExecutor[*redis.IntCmd](env.Value[int]("${package.publishParallelism}"))
   }).PreDestroy((*concurrent.Executor[*redis.IntCmd]).Close).Register()
 }
 ```
@@ -94,22 +98,42 @@ Dependency injection (DI) is a process whereby objects define their dependencies
 
 Code is cleaner with the DI principle, and decoupling is more effective when objects are provided with their dependencies. The object does not look up its dependencies and does not know the location or type of the dependencies. As a result, your services become easier to test, particularly when the dependencies are on interfaces, which allow for stub or mock implementations to be used in unit tests. Each service knows and cares only about its own dependencies when `Service A` uses `Service B` uses `Service C`.
 
-project/internal/package/MyService.go:
+project/internal/package/ServiceA.go:
 
 ```go
-type MyService struct {
-  httpClient    *http.Client  `inject:""`
-  redisClient   *redis.Client `inject:""`
-  cron          *cron.Cron    `inject:""`
-  backupPath    string        `value:"${package.backupPath}"`
+type ServiceA struct {
+  httpClient  *http.Client  `inject:""`
+  redisClient *redis.Client `inject:""`
+  scheduler   *cron.Cron    `inject:""`
+  serviceB    *ServiceB     `inject:""`
+
+  schedule string `value:"${package.schedule:* * 31 2 *}"`
+  workDir  string `value:"${package.workDir:.}"`
+
+  cronEntryId cron.EntryID
 }
 
-func NewMyService() *MyService {
-  return &MyService{}
+func NewServiceA() *ServiceA {
+  return env.ConfigurationProperties("package.ServiceA", &ServiceA{})
 }
 
-func (this *MyService) Run(args []string) {
-  this.httpClient.Get("http://example.com")
+func (this *ServiceA) PostConstruct() {
+  err.Assert(os.MkdirAll(this.workDir, 0755), "Cannot create %s", this.workDir)
+}
+
+// implements ioc.Lifecycle
+func (this *ServiceA) Start() {
+  this.cronEntryId = optional.OfCommaErr(this.scheduler.AddJob(this.schedule, this)).OrElsePanic("Failed to schedule ServiceA")
+  slog.Info(fmt.Sprintf("Scheduled ServiceA with id %v, next run at %v", this.cronEntryId, this.scheduler.Entry(this.cronEntryId).Next))
+}
+
+// implements ioc.Lifecycle
+func (this *ServiceA) Stop() {
+}
+
+// implements cron.Job
+func (this *ServiceA) Run() {
+  ...
 }
 ```
 
@@ -226,8 +250,8 @@ If `ioc.AwaitTermination()` is not used, the application behaves like a batch jo
 
 ```go
 func main() {
-	defer ioc.Close()
-	ioc.Run()
+  defer ioc.Close()
+  ioc.Run()
 }
 ```
 
@@ -235,9 +259,9 @@ For long-running applications, use `ioc.AwaitTermination()` to keep the main gor
 
 ```go
 func main() {
-	defer ioc.Close()
-	ioc.Run()
-	ioc.AwaitTermination()
+  defer ioc.Close()
+  ioc.Run()
+  ioc.AwaitTermination()
 }
 ```
 
@@ -273,15 +297,15 @@ Register one method (or more) using `.ApplicationListener(...)`
 
 ```go
 ioc.Bean[*UserService]().
-	Factory(NewUserService).
-	ApplicationListener((*UserService).OnApplicationReady).
-	Register()
+  Factory(NewUserService).
+  ApplicationListener((*UserService).OnApplicationReady).
+  Register()
 ```
 
 ```go
 // Method parameter type will be used to filer eligible events to pass to the consumer
 func (this *UserService) OnApplicationReady(event *ioc.ApplicationReadyEvent) {
-	slog.Info("application ready")
+  slog.Info("application ready")
 }
 ```
 
@@ -291,7 +315,7 @@ Any reference or value type may be used as an event.
 
 ```go
 type UserCreatedEvent struct {
-	UserID int64
+  UserID int64
 }
 ```
 
@@ -299,12 +323,12 @@ Publisher service needs `ApplicationContext` to publish events
 
 ```go
 type Service2 struct {
-	ctx *ioc.ApplicationContext
+  ctx *ioc.ApplicationContext
 }
 
 // Implements ApplicationContextAware
 func (this *Service2) SetApplicationContext(ctx *ioc.ApplicationContext) {
-	this.ctx = ctx
+  this.ctx = ctx
 }
 
 func (this *Service2) SomeMethod() {
@@ -316,15 +340,15 @@ Consumer registration
 
 ```go
 ioc.Bean[*app.Service1]().Factory(app.NewService1).
-	ApplicationListener((*app.Service1).OnUserCreated).
-	Register()
+  ApplicationListener((*app.Service1).OnUserCreated).
+  Register()
 ```
 
 Consumer service will receive _**all**_ type of events which are assignable to `*UserCreatedEvent`
 
 ```go
 func (this *Service1) OnUserCreated(event *UserCreatedEvent) {
-	...
+  ...
 }
 ```
 

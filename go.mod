@@ -3,8 +3,8 @@ module github.com/go-beans/go
 go 1.24.5
 
 require (
-	github.com/go-errr/go v1.0.11
-	github.com/go-external-config/go v1.0.34
+	github.com/go-errr/go v1.0.12
+	github.com/go-external-config/go v1.0.35
 	github.com/stretchr/testify v1.11.1
 )
 

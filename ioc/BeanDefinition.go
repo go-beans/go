@@ -8,8 +8,8 @@ import (
 	"sync"
 
 	"github.com/go-errr/go/err"
+	"github.com/go-errr/go/lang"
 	"github.com/go-external-config/go/env"
-	"github.com/go-external-config/go/lang"
 )
 
 type Scope int

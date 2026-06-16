@@ -44,26 +44,26 @@ type BeanDefinition interface {
 	preDestroyEligible() bool
 	preDestroy()
 	getMutex() *sync.Mutex
-	getApplicationListenerMethods(eventType reflect.Type) []applicationListenerMethod
+	getEventListenerMethods(eventType reflect.Type) []eventListenerMethod
 	String() string
 }
 
 type BeanDefinitionImpl[T any] struct {
-	scope                      Scope
-	t                          reflect.Type
-	names                      []string
-	primary                    bool
-	lazy                       bool
-	dependsOn                  []string
-	phase                      *int
-	order                      *int
-	profiles                   []string
-	factoryMethod              func() T
-	postConstructMethod        func(T)
-	preDestroyMethod           func(T)
-	instance                   any
-	mutex                      sync.Mutex
-	applicationListenerMethods []applicationListenerMethod
+	scope                Scope
+	t                    reflect.Type
+	names                []string
+	primary              bool
+	lazy                 bool
+	dependsOn            []string
+	phase                *int
+	order                *int
+	profiles             []string
+	factoryMethod        func() T
+	postConstructMethod  func(T)
+	preDestroyMethod     func(T)
+	instance             any
+	mutex                sync.Mutex
+	eventListenerMethods []eventListenerMethod
 }
 
 func newBeanDefinition[T any]() *BeanDefinitionImpl[T] {
@@ -145,20 +145,20 @@ func (this *BeanDefinitionImpl[T]) Profile(profileExpr ...string) *BeanDefinitio
 	return this
 }
 
-func (this *BeanDefinitionImpl[T]) ApplicationListener(method any) *BeanDefinitionImpl[T] {
+func (this *BeanDefinitionImpl[T]) EventListener(method any) *BeanDefinitionImpl[T] {
 	methodValue := reflect.ValueOf(method)
 	methodType := methodValue.Type()
 
-	lang.Assert(methodType.Kind() == reflect.Func, "ApplicationListener must be a method reference")
-	lang.Assert(methodType.NumIn() == 2, "ApplicationListener method must have receiver and one event argument")
-	lang.Assert(methodType.NumOut() == 0, "ApplicationListener method must not return values")
+	lang.Assert(methodType.Kind() == reflect.Func, "EventListener must be a method reference")
+	lang.Assert(methodType.NumIn() == 2, "EventListener method must have receiver and one event argument")
+	lang.Assert(methodType.NumOut() == 0, "EventListener method must not return values")
 
 	receiverType := methodType.In(0)
 	eventType := methodType.In(1)
 
-	lang.Assert(this.t.AssignableTo(receiverType), "ApplicationListener receiver %s does not match bean type %s", receiverType, this.t)
+	lang.Assert(this.t.AssignableTo(receiverType), "EventListener receiver %s does not match bean type %s", receiverType, this.t)
 
-	this.applicationListenerMethods = append(this.applicationListenerMethods, applicationListenerMethod{
+	this.eventListenerMethods = append(this.eventListenerMethods, eventListenerMethod{
 		eventType: eventType,
 		method:    methodValue,
 	})
@@ -301,9 +301,9 @@ func (this *BeanDefinitionImpl[T]) getMutex() *sync.Mutex {
 	return &this.mutex
 }
 
-func (this *BeanDefinitionImpl[T]) getApplicationListenerMethods(eventType reflect.Type) []applicationListenerMethod {
-	methods := make([]applicationListenerMethod, 0)
-	for _, listener := range this.applicationListenerMethods {
+func (this *BeanDefinitionImpl[T]) getEventListenerMethods(eventType reflect.Type) []eventListenerMethod {
+	methods := make([]eventListenerMethod, 0)
+	for _, listener := range this.eventListenerMethods {
 		if eventType.AssignableTo(listener.eventType) {
 			methods = append(methods, listener)
 		}
@@ -322,11 +322,11 @@ func (this *BeanDefinitionImpl[T]) String() string {
 		lang.If(this.isApplicationRunner(), " ApplicationRunner", ""))
 }
 
-type applicationListenerMethod struct {
+type eventListenerMethod struct {
 	eventType reflect.Type
 	method    reflect.Value
 }
 
-func (this applicationListenerMethod) invoke(bean any, event reflect.Value) {
+func (this eventListenerMethod) invoke(bean any, event reflect.Value) {
 	this.method.Call([]reflect.Value{reflect.ValueOf(bean), event})
 }

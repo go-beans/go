@@ -38,7 +38,7 @@ ioc.Bean[type]().
     Factory(method).
     PostConstruct(method).
     PreDestroy(method).
-    ApplicationListener(method).
+    EventListener(method).
     Register()
 ```
 
@@ -296,12 +296,12 @@ go-beans provides support for application events and listeners.
 
 ### Listening for Application Events
 
-Register one method (or more) using `.ApplicationListener(...)`
+Register one method (or more) using `.EventListener(...)`
 
 ```go
 ioc.Bean[*ServiceA]().
   Factory(NewServiceA).
-  ApplicationListener((*ServiceA).OnApplicationReady).
+  EventListener((*ServiceA).OnApplicationReady).
   Register()
 ```
 
@@ -343,7 +343,7 @@ Consumer registration
 
 ```go
 ioc.Bean[*app.ServiceA]().Factory(app.NewServiceA).
-  ApplicationListener((*app.ServiceA).OnUserCreated).
+  EventListener((*app.ServiceA).OnUserCreated).
   Register()
 ```
 

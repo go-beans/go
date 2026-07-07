@@ -1,7 +1,6 @@
 # go-beans
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/go-beans/go.svg)](https://pkg.go.dev/github.com/go-beans/go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/go-beans/go)](https://goreportcard.com/report/github.com/go-beans/go)
 [![Release](https://img.shields.io/github/v/release/go-beans/go)](https://github.com/go-beans/go/releases)
 
 Lightweight, inversion of control implementation inspired by Spring, made for Go idioms

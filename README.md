@@ -414,14 +414,14 @@ D:\dev\playground>go run ./cmd/app
 loading properties from config/application.yaml
 loading properties from config/application-live.properties
 2026/05/17 14:39:22 INFO ioc.ApplicationContext: starting with PID 11396
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registering *app.Service1 [singleton lazy]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registering *app.Service2 [singleton Lifecycle]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registering *app.Service3 [singleton Lifecycle]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registering *app.Service4 [singleton service4]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registering *app.Service5 [singleton service5]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registering *app.ApplicationRunner1 [singleton lazy ApplicationRunner]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registering *app.ApplicationRunner2 [singleton ApplicationRunner]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registering *app.ApplicationRunner3 [singleton ApplicationRunner]
+2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.Service1 [singleton lazy]
+2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.Service2 [singleton Lifecycle]
+2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.Service3 [singleton Lifecycle]
+2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.Service4 [singleton service4]
+2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.Service5 [singleton service5]
+2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.ApplicationRunner1 [singleton lazy ApplicationRunner]
+2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.ApplicationRunner2 [singleton ApplicationRunner]
+2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.ApplicationRunner3 [singleton ApplicationRunner]
 2026/05/17 14:39:22 INFO Service2.AfterPropertiesSet
 2026/05/17 14:39:22 INFO Service3.AfterPropertiesSet
 2026/05/17 14:39:22 INFO Service5.AfterPropertiesSet

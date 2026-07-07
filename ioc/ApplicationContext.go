@@ -68,7 +68,6 @@ func newApplicationContext() *ApplicationContext {
 
 func (this *ApplicationContext) register(bean BeanDefinition) {
 	if env.MatchesProfiles(bean.getProfiles()...) {
-		slog.Debug(fmt.Sprintf("ioc.ApplicationContext: registering %s", bean))
 		if len(bean.getNames()) > 0 {
 			for _, name := range bean.getNames() {
 				_, ok := this.named[name]
@@ -78,6 +77,7 @@ func (this *ApplicationContext) register(bean BeanDefinition) {
 		}
 		this.beans[bean.getType()] = append(this.beans[bean.getType()], bean)
 		this.registered = append(this.registered, bean)
+		slog.Debug(fmt.Sprintf("ioc.ApplicationContext: registered %s", bean))
 	}
 }
 

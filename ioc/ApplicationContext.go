@@ -6,11 +6,13 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"os/signal"
 	"reflect"
 	"runtime"
 	"sort"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	con "github.com/go-beans/go/concurrent"
@@ -53,7 +55,7 @@ func applicationContextInstance() *ApplicationContext {
 
 func newApplicationContext() *ApplicationContext {
 	slog.Info(fmt.Sprintf("ioc.ApplicationContext: starting with PID %d", os.Getpid()))
-	context, cancel := context.WithCancel(context.Background())
+	context, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	return &ApplicationContext{
 		context:             context,
 		cancel:              cancel,

@@ -60,11 +60,8 @@ package ioc
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/signal"
 	"reflect"
 	"strings"
-	"syscall"
 
 	"github.com/go-errr/go/err"
 	"github.com/go-errr/go/lang"
@@ -353,7 +350,5 @@ func Exit(code int, format string, a ...any) {
 //
 // The method returns when application shutdown is initiated.
 func AwaitTermination() {
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
+	<-Context().Done()
 }

@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-beans/go/ioc"
 	"github.com/go-external-config/go/env"
-	"github.com/go-external-config/go/util/optional"
+	"github.com/go-jang/go/util/optional"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )

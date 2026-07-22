@@ -64,8 +64,8 @@ import (
 	"strings"
 
 	"github.com/go-errr/go/err"
-	"github.com/go-errr/go/lang"
-	"github.com/go-external-config/go/util/reflects"
+	"github.com/go-jang/go/lang"
+	refl "github.com/go-jang/go/lang/reflect"
 )
 
 const InjectTag = "inject"
@@ -174,7 +174,7 @@ func InjectBeans[T any](target *T) *T {
 }
 
 func injectBeansAny(target any) any {
-	reflects.ForEachTaggedField(target, InjectTag, func(field reflects.Field) {
+	refl.ForEachTaggedField(target, InjectTag, func(field refl.Field) {
 		name, optional := parseInjectTag(field)
 		qualifier := InjectQualifier[any]{
 			fieldName: field.Field.Name,
@@ -190,7 +190,7 @@ func injectBeansAny(target any) any {
 	return target
 }
 
-func parseInjectTag(field reflects.Field) (name string, optional bool) {
+func parseInjectTag(field refl.Field) (name string, optional bool) {
 	parts := strings.Split(field.TagValue, ",")
 	if len(parts) > 0 {
 		name = strings.TrimSpace(parts[0])

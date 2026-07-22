@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/go-errr/go/err"
-	"github.com/go-errr/go/lang"
+	"github.com/go-jang/go/lang"
 )
 
 type InjectQualifier[T any] struct {

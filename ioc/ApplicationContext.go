@@ -15,12 +15,11 @@ import (
 	"syscall"
 	"time"
 
-	con "github.com/go-beans/go/concurrent"
 	"github.com/go-errr/go/err"
-	"github.com/go-errr/go/lang"
 	"github.com/go-external-config/go/env"
-	"github.com/go-external-config/go/util/collection"
-	"github.com/go-external-config/go/util/concurrent"
+	"github.com/go-jang/go/lang"
+	"github.com/go-jang/go/util/collections"
+	"github.com/go-jang/go/util/concurrent"
 )
 
 var applicationContext atomic.Pointer[ApplicationContext]
@@ -196,7 +195,7 @@ func (this *ApplicationContext) initializeBeans() {
 }
 
 func (this *ApplicationContext) startLifecycleBeans() {
-	executor := con.NewExecutor[BeanDefinition](runtime.NumCPU())
+	executor := concurrent.NewExecutor[BeanDefinition](runtime.NumCPU())
 	defer executor.Close()
 
 	phaseToBeans := this.phaseToLifecycleBeans(this.registered)
@@ -209,7 +208,7 @@ func (this *ApplicationContext) startLifecycleBeans() {
 	var err error
 	for _, phase := range sortedPhases {
 		beans := phaseToBeans[phase]
-		futures := make([]con.Future[BeanDefinition], 0)
+		futures := make([]concurrent.Future[BeanDefinition], 0)
 		for _, bean := range beans {
 			futures = append(futures, executor.Submit(func() BeanDefinition {
 				this.beanInstance(bean).(Lifecycle).Start()
@@ -363,7 +362,7 @@ func (this *ApplicationContext) Stop() {
 }
 
 func (this *ApplicationContext) stopLifecycleBeans() {
-	executor := con.NewExecutor[BeanDefinition](runtime.NumCPU())
+	executor := concurrent.NewExecutor[BeanDefinition](runtime.NumCPU())
 	defer executor.Close()
 
 	phaseToBeans := this.phaseToLifecycleBeans(this.started)
@@ -374,9 +373,9 @@ func (this *ApplicationContext) stopLifecycleBeans() {
 	}
 	sort.Ints(sortedPhases)
 
-	for _, phase := range collection.ReverseSlice(sortedPhases) {
+	for _, phase := range collections.ReverseSlice(sortedPhases) {
 		beans := phaseToBeans[phase]
-		futures := make([]con.Future[BeanDefinition], 0)
+		futures := make([]concurrent.Future[BeanDefinition], 0)
 		for _, bean := range beans {
 			futures = append(futures, executor.Submit(func() BeanDefinition {
 				defer err.Recover(func(e any) {
@@ -393,7 +392,7 @@ func (this *ApplicationContext) stopLifecycleBeans() {
 }
 
 func (this *ApplicationContext) destroyBeans() {
-	this.foreachBeanDefinition(collection.ReverseSlice(this.instantiated),
+	this.foreachBeanDefinition(collections.ReverseSlice(this.instantiated),
 		func(bean BeanDefinition) bool { return bean.preDestroyEligible() },
 		func(bean BeanDefinition) {
 			bean.preDestroy()

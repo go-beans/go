@@ -441,11 +441,11 @@ loading properties from config/application-live.properties
         at sync.(*Once).Do (C:/Program Files/Go/src/sync/once.go:69)
         at github.com/go-beans/go/ioc.(*InjectQualifier[...]).resolve.func1 (D:/dev/go-beans/ioc/InjectQualifier.go:51)
         at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate.injectBeansAny.func2 (D:/dev/go-beans/ioc/ioc.go:84)
-        at github.com/go-external-config/go/util/reflects.ForEachTaggedField (D:/dev/go-external-config/util/reflects/reflects.go:39)
+        at github.com/go-jang/go/lang/reflect.ForEachTaggedField (D:/dev/go-jang/lang/reflect/reflect.go:39)
         at github.com/go-beans/go/ioc.injectBeansAny (D:/dev/go-beans/ioc/ioc.go:76)
         at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate (D:/dev/go-beans/ioc/BeanDefinition.go:240)
         at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func2 (D:/dev/go-beans/ioc/ApplicationContext.go:152)
-        at github.com/go-external-config/go/util/concurrent.Synchronized (D:/dev/go-external-config/util/concurrent/concurrent.go:11)
+        at github.com/go-jang/go/util/concurrent.Synchronized (D:/dev/go-jang/util/concurrent/concurrent.go:11)
         at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:149)
         at github.com/go-beans/go/ioc.(*ApplicationContext).orderedBeanInstances.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:268)
         at github.com/go-beans/go/ioc.(*ApplicationContext).foreachBeanDefinition (D:/dev/go-beans/ioc/ApplicationContext.go:427)
@@ -463,8 +463,8 @@ Caused by: *err.RuntimeException: Error creating bean *app.Service1 [singleton l
         ... 20 common frames omitted
 Caused by: *err.RuntimeException: Cannot bind configuration value '${vault.prod/db#password}' to field 'dbPass'
         at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate.BindPropertiesAny.func1.1 (D:/dev/go-external-config/env/env.go:58)
-        at github.com/go-external-config/go/util/optional.(*Optional[...]).panicIfEmpty (D:/dev/go-external-config/util/optional/Optional.go:80)
-        at github.com/go-external-config/go/util/optional.(*Optional[...]).OrElsePanic (D:/dev/go-external-config/util/optional/Optional.go:74)
+        at github.com/go-jang/go/util/optional.(*Optional[...]).panicIfEmpty (D:/dev/go-jang/util/optional/Optional.go:80)
+        at github.com/go-jang/go/util/optional.(*Optional[...]).OrElsePanic (D:/dev/go-jang/util/optional/Optional.go:74)
         at github.com/go-external-config/vault/env.(*VaultPropertySource).getSecretValue (D:/dev/go-external-config-vault/env/VaultPropertySource.go:84)
         at github.com/go-external-config/vault/env.(*VaultPropertySource).resolveVaultProperty (D:/dev/go-external-config-vault/env/VaultPropertySource.go:80)
         at github.com/go-external-config/vault/env.(*VaultPropertySource).Property (D:/dev/go-external-config-vault/env/VaultPropertySource.go:60)
@@ -475,14 +475,14 @@ Caused by: *err.RuntimeException: Cannot bind configuration value '${vault.prod/
         at github.com/go-external-config/go/util/regex.(*PatternProcessor).Process (D:/dev/go-external-config/util/regex/PatternProcessor.go:24)
         at github.com/go-external-config/go/env.(*Environment).ResolveRequiredPlaceholders (D:/dev/go-external-config/env/Environment.go:89)
         at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate.BindPropertiesAny.func1 (D:/dev/go-external-config/env/env.go:60)
-        at github.com/go-external-config/go/util/reflects.ForEachTaggedField (D:/dev/go-external-config/util/reflects/reflects.go:39)
+        at github.com/go-jang/go/lang/reflect.ForEachTaggedField (D:/dev/go-jang/lang/reflect/reflect.go:39)
         at github.com/go-external-config/go/env.BindPropertiesAny (D:/dev/go-external-config/env/env.go:56)
         at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate (D:/dev/go-beans/ioc/BeanDefinition.go:239)
         at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func2 (D:/dev/go-beans/ioc/ApplicationContext.go:152)
-        at github.com/go-external-config/go/util/concurrent.Synchronized (D:/dev/go-external-config/util/concurrent/concurrent.go:11)
+        at github.com/go-jang/go/util/concurrent.Synchronized (D:/dev/go-jang/util/concurrent/concurrent.go:11)
         ... 21 common frames omitted
 Caused by: *err.RuntimeException: Unable to get prod/db
-        at github.com/go-external-config/go/util/optional.(*Optional[...]).panicIfEmpty (D:/dev/go-external-config/util/optional/Optional.go:80)
+        at github.com/go-jang/go/util/optional.(*Optional[...]).panicIfEmpty (D:/dev/go-jang/util/optional/Optional.go:80)
         ... 37 common frames omitted
 Caused by: *fmt.wrapError: error encountered while reading secret at secret/data/prod/db: Get "http://127.0.0.1:8200/v1/secret/data/prod/db": dial tcp 127.0.0.1:8200: connectex: No connection could be made because the target machine actively refused it.
 Caused by: *url.Error: Get "http://127.0.0.1:8200/v1/secret/data/prod/db": dial tcp 127.0.0.1:8200: connectex: No connection could be made because the target machine actively refused it.

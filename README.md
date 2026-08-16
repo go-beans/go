@@ -397,6 +397,12 @@ You can programmatically set active profiles by calling `env.SetActiveProfiles("
 
 ## Transparent startup diagnostics
 
+`go-beans` uses Go's standard `log/slog` API. Logging levels are controlled by the application's `slog` configuration.
+
+Enable `INFO` logging to see application context lifecycle information, including the process ID, startup time, shutdown time, and uptime.  
+Enable `DEBUG` logging to list all registered beans.  
+See also [go-log4g](https://github.com/go-log4g/core).
+
 One common concern about dependency injection frameworks is that startup failures become difficult to debug because abstraction layers hide the original cause.
 
 `go-beans` uses `go-errr/go` to work with errors and preserve call stacks with source file names and line numbers.  
@@ -407,21 +413,22 @@ The stack trace below should be read in two directions:
 - wrapped errors (`Caused by`) are read top-to-bottom, with the root cause at the bottom;
 - call stacks (`at ...`) are read bottom-to-top, with outer callers at the bottom.
 
-Already started services are gracefully stopped.
+If startup fails after services have already been started, `go-beans`
+gracefully stops them before the application exits.
 
 ```
 D:\dev\playground>go run ./cmd/app
-loading properties from config/application.yaml
-loading properties from config/application-live.properties
-2026/05/17 14:39:22 INFO ioc.ApplicationContext: starting with PID 11396
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.Service1 [singleton lazy]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.Service2 [singleton Lifecycle]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.Service3 [singleton Lifecycle]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.Service4 [singleton service4]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.Service5 [singleton service5]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.ApplicationRunner1 [singleton lazy ApplicationRunner]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.ApplicationRunner2 [singleton ApplicationRunner]
-2026/05/17 14:39:22 DEBUG ioc.ApplicationContext: registered *app.ApplicationRunner3 [singleton ApplicationRunner]
+2026/05/17 14:39:22 INFO loading properties from config/application.yaml
+2026/05/17 14:39:22 INFO loading properties from config/application-live.properties
+2026/05/17 14:39:22 INFO starting with PID 11396
+2026/05/17 14:39:22 DEBUG registered *app.Service1 [singleton lazy]
+2026/05/17 14:39:22 DEBUG registered *app.Service2 [singleton Lifecycle]
+2026/05/17 14:39:22 DEBUG registered *app.Service3 [singleton Lifecycle]
+2026/05/17 14:39:22 DEBUG registered *app.Service4 [singleton service4]
+2026/05/17 14:39:22 DEBUG registered *app.Service5 [singleton service5]
+2026/05/17 14:39:22 DEBUG registered *app.ApplicationRunner1 [singleton lazy ApplicationRunner]
+2026/05/17 14:39:22 DEBUG registered *app.ApplicationRunner2 [singleton ApplicationRunner]
+2026/05/17 14:39:22 DEBUG registered *app.ApplicationRunner3 [singleton ApplicationRunner]
 2026/05/17 14:39:22 INFO Service2.AfterPropertiesSet
 2026/05/17 14:39:22 INFO Service3.AfterPropertiesSet
 2026/05/17 14:39:22 INFO Service5.AfterPropertiesSet
@@ -430,7 +437,7 @@ loading properties from config/application-live.properties
 2026/05/17 14:39:22 INFO ApplicationRunner3.AfterPropertiesSet
 2026/05/17 14:39:22 INFO Service3.Start
 2026/05/17 14:39:22 INFO Service2.Start
-2026/05/17 14:39:22 INFO ioc.ApplicationContext: context refreshed in 1.1175ms
+2026/05/17 14:39:22 INFO context refreshed in 1.1175ms
 2026/05/17 14:39:26 ERROR Context run failed. *err.RuntimeException: Error creating bean *app.ApplicationRunner1 [singleton lazy ApplicationRunner]
         at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:140)
         at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:149)
@@ -489,10 +496,10 @@ Caused by: *url.Error: Get "http://127.0.0.1:8200/v1/secret/data/prod/db": dial 
 Caused by: *net.OpError: dial tcp 127.0.0.1:8200: connectex: No connection could be made because the target machine actively refused it.
 Caused by: *os.SyscallError: connectex: No connection could be made because the target machine actively refused it.
 Caused by: syscall.Errno: No connection could be made because the target machine actively refused it.
-2026/05/17 14:39:26 INFO ioc.ApplicationContext: closing context with 8 running services
+2026/05/17 14:39:26 INFO closing context with 8 running services
 2026/05/17 14:39:26 INFO Service2.Stop
 2026/05/17 14:39:26 INFO Service3.Stop
-2026/05/17 14:39:26 INFO ioc.ApplicationContext: context closed in 17.8322ms, uptime 4.3038338s
+2026/05/17 14:39:26 INFO context closed in 17.8322ms, uptime 4.3038338s
 exit status 1
 ```
 
@@ -509,4 +516,5 @@ go get github.com/go-beans/go
 ## See also
 
 [github.com/go-external-config/go](https://github.com/go-external-config/go)  
-[github.com/go-errr/go](https://github.com/go-errr/go)
+[github.com/go-log4g](https://github.com/go-log4g/core)  
+[github.com/go-errr/go](https://github.com/go-errr/go)  

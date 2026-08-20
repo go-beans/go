@@ -491,10 +491,10 @@ Caused by: *err.RuntimeException: Cannot bind configuration value '${vault.prod/
 Caused by: *err.RuntimeException: Unable to get prod/db
         at github.com/go-jang/go/util/optional.(*Optional[...]).panicIfEmpty (D:/dev/go-jang/util/optional/Optional.go:80)
         ... 37 common frames omitted
-Caused by: *fmt.wrapError: error encountered while reading secret at secret/data/prod/db: Get "http://127.0.0.1:8200/v1/secret/data/prod/db": dial tcp 127.0.0.1:8200: connectex: No connection could be made because the target machine actively refused it.
-Caused by: *url.Error: Get "http://127.0.0.1:8200/v1/secret/data/prod/db": dial tcp 127.0.0.1:8200: connectex: No connection could be made because the target machine actively refused it.
-Caused by: *net.OpError: dial tcp 127.0.0.1:8200: connectex: No connection could be made because the target machine actively refused it.
-Caused by: *os.SyscallError: connectex: No connection could be made because the target machine actively refused it.
+Caused by: *fmt.wrapError: error encountered while reading secret at secret/data/prod/db
+Caused by: *url.Error: Get "http://127.0.0.1:8200/v1/secret/data/prod/db"
+Caused by: *net.OpError: dial tcp 127.0.0.1:8200
+Caused by: *os.SyscallError: connectex
 Caused by: syscall.Errno: No connection could be made because the target machine actively refused it.
 2026/05/17 14:39:26 INFO closing context with 8 running services
 2026/05/17 14:39:26 INFO Service2.Stop

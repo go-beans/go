@@ -3,9 +3,9 @@ module github.com/go-beans/go
 go 1.26.2
 
 require (
-	github.com/go-errr/go v1.0.13
-	github.com/go-external-config/go v1.0.41
-	github.com/go-jang/go v1.0.3
+	github.com/go-errr/go v1.0.14
+	github.com/go-external-config/go v1.0.42
+	github.com/go-jang/go v1.0.4
 	github.com/stretchr/testify v1.11.1
 )
 

@@ -53,7 +53,7 @@ func applicationContextInstance() *ApplicationContext {
 }
 
 func newApplicationContext() *ApplicationContext {
-	slog.Info(fmt.Sprintf("starting with PID %d", os.Getpid()))
+	slog.Info(fmt.Sprintf("Starting with PID %d", os.Getpid()))
 	context, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	return &ApplicationContext{
 		context:             context,
@@ -78,7 +78,7 @@ func (this *ApplicationContext) register(bean BeanDefinition) {
 		}
 		this.beans[bean.getType()] = append(this.beans[bean.getType()], bean)
 		this.registered = append(this.registered, bean)
-		slog.Debug(fmt.Sprintf("registered %s", bean))
+		slog.Debug(fmt.Sprintf("Registered %s", bean))
 	}
 }
 
@@ -182,7 +182,7 @@ func (this *ApplicationContext) doRefresh() {
 	this.startLifecycleBeans()
 	this.refreshed.Store(true)
 
-	slog.Info(fmt.Sprintf("context refreshed in %v", time.Since(threshold)))
+	slog.Info(fmt.Sprintf("Context refreshed in %v", time.Since(threshold)))
 	this.PublishEvent(NewContextRefreshedEvent(this))
 }
 
@@ -310,14 +310,14 @@ func (this *ApplicationContext) close() {
 	concurrent.Synchronized(&applicationContextMu, func() {
 		if this.closing.CompareAndSwap(false, true) {
 			threshold := time.Now()
-			slog.Info(fmt.Sprintf("closing context with %d running services", this.servicesCount.Load()))
+			slog.Info(fmt.Sprintf("Closing context with %d running services", this.servicesCount.Load()))
 			this.publishEvent(NewContextClosedEvent(), true)
 
 			this.cancel()
 			this.stopLifecycleBeans()
 			this.destroyBeans()
 
-			slog.Info(fmt.Sprintf("context closed in %v, uptime %v", time.Since(threshold), time.Since(this.startTime)))
+			slog.Info(fmt.Sprintf("Context closed in %v, uptime %v", time.Since(threshold), time.Since(this.startTime)))
 			applicationContext.CompareAndSwap(this, nil)
 		}
 	})

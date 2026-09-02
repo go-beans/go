@@ -254,9 +254,6 @@ func (this *BeanDefinitionImpl[T]) instantiate() any {
 	if bean, ok := obj.(BeanNameAware); ok && len(this.names) > 0 {
 		bean.SetBeanName(this.names[0])
 	}
-	if bean, ok := obj.(EnvironmentAware); ok {
-		bean.SetEnvironment(env.Instance())
-	}
 	if bean, ok := obj.(ApplicationContextAware); ok {
 		bean.SetApplicationContext(applicationContextInstance())
 	}

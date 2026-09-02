@@ -196,7 +196,7 @@ Refresh phase:
    Non-lazy singleton beans are created.
 
 2. Aware callbacks
-   BeanNameAware, EnvironmentAware, ApplicationContextAware, ...
+   BeanNameAware, ApplicationContextAware
 
 3. Configuration and dependency injection
    value tags, inject tags, configuration binding.

@@ -81,9 +81,9 @@ func init() {
     return redis.NewClient(env.ConfigurationProperties("package.redis", env.ConfigurationProperties("redis", &redis.Options{})))
   }).PreDestroy(func(c *redis.Client) { c.Close() }).Register()
 
-  ioc.Bean[*concurrent.Executor[*redis.IntCmd]]().Name("publishExecutor").Factory(func() *concurrent.Executor[*redis.IntCmd] {
-    return concurrent.NewExecutor[*redis.IntCmd](env.Value[int]("${package.publishParallelism}"))
-  }).PreDestroy((*concurrent.Executor[*redis.IntCmd]).Close).Register()
+  ioc.Bean[*concurrent.Executor]().Name("publishExecutor").Factory(func() *concurrent.Executor {
+    return concurrent.NewExecutor(env.Value[int]("${package.publishParallelism}"))
+  }).PreDestroy((*concurrent.Executor).Shutdown).Register()
 }
 ```
 
@@ -101,16 +101,16 @@ project/internal/package/ServiceA.go:
 
 ```go
 type ServiceA struct {
-  httpClient      *http.Client                        `inject:""`
-  redisClient     *redis.Client                       `inject:""`
-  scheduler       *cron.Cron                          `inject:""`
-  serviceB        *ServiceB                           `inject:""`
-  publishExecutor *concurrent.Executor[*redis.IntCmd] `inject:"publishExecutor"`
+	httpClient      *http.Client         `inject:""`
+	redisClient     *redis.Client        `inject:""`
+	scheduler       *cron.Cron           `inject:""`
+	serviceB        *ServiceB            `inject:""`
+	publishExecutor *concurrent.Executor `inject:"publishExecutor"`
 
-  schedule string `value:"${package.schedule:* * 31 2 *}"`
-  workDir  string `value:"${app.workDir:.}"`
+	schedule string `value:"${package.schedule:* * 31 2 *}"`
+	workDir  string `value:"${app.workDir:.}"`
 
-  cronEntryId cron.EntryID
+	cronEntryId cron.EntryID
 }
 
 func NewServiceA() *ServiceA {

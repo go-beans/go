@@ -82,7 +82,7 @@ func init() {
   }).PreDestroy(func(c *redis.Client) { c.Close() }).Register()
 
   ioc.Bean[*concurrent.Executor]().Name("publishExecutor").Factory(func() *concurrent.Executor {
-    return concurrent.NewExecutor(env.Value[int]("${package.publishParallelism}"))
+    return concurrent.NewExecutor(env.Value[int]("${package.publishParallelism}"), 0)
   }).PreDestroy((*concurrent.Executor).Shutdown).Register()
 }
 ```

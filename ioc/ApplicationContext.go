@@ -195,8 +195,8 @@ func (this *ApplicationContext) initializeBeans() {
 }
 
 func (this *ApplicationContext) startLifecycleBeans() {
-	executor := concurrent.NewExecutor[BeanDefinition](runtime.NumCPU())
-	defer executor.Close()
+	executor := concurrent.NewExecutor(runtime.NumCPU(), 0)
+	defer executor.Shutdown()
 
 	phaseToBeans := this.phaseToLifecycleBeans(this.registered)
 	sortedPhases := make([]int, 0, len(phaseToBeans))
@@ -210,7 +210,7 @@ func (this *ApplicationContext) startLifecycleBeans() {
 		beans := phaseToBeans[phase]
 		futures := make([]concurrent.Future[BeanDefinition], 0)
 		for _, bean := range beans {
-			futures = append(futures, executor.Submit(func() BeanDefinition {
+			futures = append(futures, concurrent.Submit(executor, func(_ context.Context) BeanDefinition {
 				this.beanInstance(bean).(Lifecycle).Start()
 				return bean
 			}))
@@ -362,8 +362,8 @@ func (this *ApplicationContext) Stop() {
 }
 
 func (this *ApplicationContext) stopLifecycleBeans() {
-	executor := concurrent.NewExecutor[BeanDefinition](runtime.NumCPU())
-	defer executor.Close()
+	executor := concurrent.NewExecutor(runtime.NumCPU(), 0)
+	defer executor.Shutdown()
 
 	phaseToBeans := this.phaseToLifecycleBeans(this.started)
 	this.started = nil
@@ -377,7 +377,7 @@ func (this *ApplicationContext) stopLifecycleBeans() {
 		beans := phaseToBeans[phase]
 		futures := make([]concurrent.Future[BeanDefinition], 0)
 		for _, bean := range beans {
-			futures = append(futures, executor.Submit(func() BeanDefinition {
+			futures = append(futures, concurrent.Submit(executor, func(_ context.Context) BeanDefinition {
 				defer err.Recover(func(e any) {
 					slog.Error(fmt.Sprintf("Could not stop Lifecycle bean %v. %s", bean, err.PrintStackTrace(e)))
 				})

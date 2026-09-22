@@ -6,18 +6,28 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"unicode"
 
 	"github.com/go-errr/go/err"
 	"github.com/go-external-config/go/env"
 	"github.com/go-jang/go/lang"
+	refl "github.com/go-jang/go/lang/reflect"
 )
 
 type Scope int
 type Profile string
+type BeanInitializationState int
 
 const (
 	Singleton Scope = iota
 	Prototype
+)
+
+const (
+	BeanNotInitialized BeanInitializationState = iota
+	BeanInitializing
+	BeanInitialized
 )
 
 var lifecycleType = lang.TypeOf[Lifecycle]()
@@ -34,13 +44,23 @@ type BeanDefinition interface {
 	isLifecycleBean() bool
 	isPhased() bool
 	isApplicationRunner() bool
+	isBeanPostProcessor() bool
 	isOrdered() bool
 	getDependsOn() []string
 	getPhase() *int
 	getOrder() *int
 	getProfiles() []string
 	instantiate() any
+	injectDependencies()
+	reinjectDependencies()
+	initialize()
 	getInstance() any
+	setInstance(instance any)
+	getOriginalInstance() any
+	getInstances() []any
+	getInitializationState() BeanInitializationState
+	compareAndSwapInitializationState(old, new BeanInitializationState) bool
+	setInitializationState(state BeanInitializationState)
 	preDestroyEligible() bool
 	preDestroy()
 	getMutex() *sync.Mutex
@@ -62,6 +82,9 @@ type BeanDefinitionImpl[T any] struct {
 	postConstructMethod  func(T)
 	preDestroyMethod     func(T)
 	instance             any
+	originalInstance     any
+	instances            []any
+	initializationState  atomic.Int32
 	mutex                sync.Mutex
 	eventListenerMethods []eventListenerMethod
 }
@@ -204,7 +227,23 @@ func (this *BeanDefinitionImpl[T]) getType() reflect.Type {
 }
 
 func (this *BeanDefinitionImpl[T]) getNames() []string {
-	return this.names
+	if len(this.names) > 0 {
+		return this.names
+	}
+	t := this.getType()
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	name := t.Name()
+	if name == "" {
+		return []string{t.String()}
+	}
+	runes := []rune(name)
+	if len(runes) > 1 && unicode.IsUpper(runes[0]) && unicode.IsUpper(runes[1]) {
+		return []string{name}
+	}
+	runes[0] = unicode.ToLower(runes[0])
+	return []string{string(runes)}
 }
 
 func (this *BeanDefinitionImpl[T]) isPrimary() bool {
@@ -225,6 +264,10 @@ func (this *BeanDefinitionImpl[T]) isPhased() bool {
 
 func (this *BeanDefinitionImpl[T]) isApplicationRunner() bool {
 	return this.getType().Implements(applicationRunnerType)
+}
+
+func (this *BeanDefinitionImpl[T]) isBeanPostProcessor() bool {
+	return this.t.Implements(reflect.TypeFor[BeanPostProcessor]())
 }
 
 func (this *BeanDefinitionImpl[T]) isOrdered() bool {
@@ -249,7 +292,9 @@ func (this *BeanDefinitionImpl[T]) getProfiles() []string {
 
 func (this *BeanDefinitionImpl[T]) instantiate() any {
 	instance := this.factoryMethod()
+	this.originalInstance = instance
 	this.instance = instance
+	this.instances = []any{instance}
 	var obj any = instance
 	if bean, ok := obj.(BeanNameAware); ok && len(this.names) > 0 {
 		bean.SetBeanName(this.names[0])
@@ -257,22 +302,73 @@ func (this *BeanDefinitionImpl[T]) instantiate() any {
 	if bean, ok := obj.(ApplicationContextAware); ok {
 		bean.SetApplicationContext(applicationContextInstance())
 	}
-	value := reflect.ValueOf(instance)
-	if value.Kind() == reflect.Pointer && !value.IsNil() && value.Elem().Kind() == reflect.Struct {
-		env.BindPropertiesAny(instance)
-		injectBeansAny(instance)
-	}
-	if this.postConstructMethod != nil {
-		this.postConstructMethod(instance)
-	}
-	if bean, ok := obj.(InitializingBean); ok {
-		bean.AfterPropertiesSet()
-	}
 	return instance
 }
 
+func (this *BeanDefinitionImpl[T]) injectDependencies() {
+	value := reflect.ValueOf(this.instance)
+	if value.Kind() == reflect.Pointer && !value.IsNil() && value.Elem().Kind() == reflect.Struct {
+		env.BindPropertiesAny(this.instance)
+		injectBeansAny(this.instance)
+	}
+}
+
+func (this *BeanDefinitionImpl[T]) reinjectDependencies() {
+	for _, instance := range this.instances {
+		value := reflect.ValueOf(instance)
+		if value.Kind() == reflect.Pointer && !value.IsNil() && value.Elem().Kind() == reflect.Struct {
+			this.reinjectBeansAny(instance)
+		}
+	}
+}
+
+func (this *BeanDefinitionImpl[T]) reinjectBeansAny(target any) {
+	refl.ForEachTaggedField(target, InjectTag, func(field refl.Field) {
+		current := field.Value
+		if current.Kind() == reflect.Interface {
+			if current.IsNil() {
+				return
+			}
+			current = current.Elem()
+		}
+		if current.Kind() != reflect.Pointer || current.IsNil() {
+			return
+		}
+		for _, dependency := range applicationContextInstance().instantiated {
+			for _, instance := range dependency.getInstances() {
+				candidate := reflect.ValueOf(instance)
+				if candidate.Kind() != reflect.Pointer || candidate.IsNil() {
+					continue
+				}
+				if current.Type() != candidate.Type() || current.Pointer() != candidate.Pointer() {
+					continue
+				}
+				replacement := reflect.ValueOf(dependency.getInstance())
+				if !replacement.IsValid() {
+					return
+				}
+				if replacement.Kind() == reflect.Pointer && replacement.Type() == current.Type() && replacement.Pointer() == current.Pointer() {
+					return
+				}
+				lang.Assert(replacement.Type().AssignableTo(field.Type), "Cannot reinject field '%s': final bean %s is not assignable to %s", field.Field.Name, replacement.Type(), field.Type)
+				field.Value.Set(replacement)
+				return
+			}
+		}
+	})
+}
+
+func (this *BeanDefinitionImpl[T]) initialize() {
+	if this.postConstructMethod != nil {
+		this.postConstructMethod(this.originalInstance.(T))
+	}
+	if bean, ok := this.originalInstance.(InitializingBean); ok {
+		bean.AfterPropertiesSet()
+	}
+}
+
 func (this *BeanDefinitionImpl[T]) preDestroyEligible() bool {
-	var obj any = this.instance
+	var obj any = this.originalInstance
 	_, isDisposable := obj.(DisposableBean)
 	return this.scope == Singleton && (this.preDestroyMethod != nil || isDisposable)
 }
@@ -282,9 +378,9 @@ func (this *BeanDefinitionImpl[T]) preDestroy() {
 		slog.Error(fmt.Sprintf("Could not destroy bean %v. %s", this, err.PrintStackTrace(e)))
 	})
 	if this.preDestroyMethod != nil {
-		this.preDestroyMethod(this.instance.(T))
+		this.preDestroyMethod(this.originalInstance.(T))
 	}
-	var obj any = this.instance
+	var obj any = this.originalInstance
 	if bean, ok := obj.(DisposableBean); ok {
 		bean.Destroy()
 	}
@@ -292,6 +388,31 @@ func (this *BeanDefinitionImpl[T]) preDestroy() {
 
 func (this *BeanDefinitionImpl[T]) getInstance() any {
 	return this.instance
+}
+
+func (this *BeanDefinitionImpl[T]) setInstance(instance any) {
+	this.instance = instance
+	this.instances = append(this.instances, instance)
+}
+
+func (this *BeanDefinitionImpl[T]) getOriginalInstance() any {
+	return this.originalInstance
+}
+
+func (this *BeanDefinitionImpl[T]) getInstances() []any {
+	return this.instances
+}
+
+func (this *BeanDefinitionImpl[T]) getInitializationState() BeanInitializationState {
+	return BeanInitializationState(this.initializationState.Load())
+}
+
+func (this *BeanDefinitionImpl[T]) compareAndSwapInitializationState(old, new BeanInitializationState) bool {
+	return this.initializationState.CompareAndSwap(int32(old), int32(new))
+}
+
+func (this *BeanDefinitionImpl[T]) setInitializationState(state BeanInitializationState) {
+	this.initializationState.Store(int32(state))
 }
 
 func (this *BeanDefinitionImpl[T]) getMutex() *sync.Mutex {
@@ -310,13 +431,14 @@ func (this *BeanDefinitionImpl[T]) getEventListenerMethods(eventType reflect.Typ
 
 // Implements String
 func (this *BeanDefinitionImpl[T]) String() string {
-	return fmt.Sprintf("%s [%s%s%s%s%s%s]", this.t,
+	return fmt.Sprintf("%s [%s%s%s%s%s%s%s]", this.t,
 		lang.If(this.scope == Singleton, "singleton", "prototype"),
 		lang.If(len(this.names) > 0, " "+strings.Join(this.names, ", "), ""),
 		lang.If(this.primary, " primary", ""),
 		lang.If(this.lazy, " lazy", ""),
 		lang.If(this.isLifecycleBean(), " Lifecycle", ""),
-		lang.If(this.isApplicationRunner(), " ApplicationRunner", ""))
+		lang.If(this.isApplicationRunner(), " ApplicationRunner", ""),
+		lang.If(this.isBeanPostProcessor(), " BeanPostProcessor", ""))
 }
 
 type eventListenerMethod struct {

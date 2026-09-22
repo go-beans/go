@@ -20,8 +20,8 @@ func TestMain(m *testing.M) {
 	ioc.Bean[*Counter]().Name("singletonCounter", "counter").Factory(NewCounter).Register()
 	ioc.Bean[*Counter]().Scope("prototype").Name("prototypeCounter").Factory(NewCounter).Register()
 
-	ioc.Bean[*CalculatorImpl]().Primary().Profile("test").Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).PreDestroy((*CalculatorImpl).PreDestroy).Register()
 	ioc.Bean[*CalculatorImpl]().Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).Register()
+	ioc.Bean[*CalculatorImpl]().Primary().Profile("test").Name("testCalculator").Factory(NewCalculatorImpl).PostConstruct((*CalculatorImpl).PostConstruct).PreDestroy((*CalculatorImpl).PreDestroy).Register()
 	ioc.Bean[*AddOperation]().Name("addOperation").Factory(NewAddOperation).Register()
 	ioc.Bean[*SubtractOperation]().Name("subtractOperation").Factory(NewSubtractOperation).Register()
 	ioc.Bean[*MultiplyOperation]().Name("multiplyOperation").Factory(NewMultiplyOperation).Register()
@@ -55,6 +55,23 @@ func TestMain(m *testing.M) {
 		}
 	}).Register()
 
+	ioc.Bean[ReinjectionDependency]().Name("reinjectionDependency").Factory(func() ReinjectionDependency {
+		return &ReinjectionDependencyImpl{}
+	}).Register()
+	ioc.Bean[ReinjectionService]().Name("reinjectionService").Factory(func() ReinjectionService {
+		return &ReinjectionServiceImpl{}
+	}).Register()
+	ioc.Bean[*ReinjectionConsumer]().Factory(func() *ReinjectionConsumer {
+		return &ReinjectionConsumer{}
+	}).Register()
+	ioc.Bean[*FirstReinjectionPostProcessor]().Factory(func() *FirstReinjectionPostProcessor {
+		return &FirstReinjectionPostProcessor{}
+	}).Register()
+	ioc.Bean[*SecondReinjectionPostProcessor]().Factory(func() *SecondReinjectionPostProcessor {
+		return &SecondReinjectionPostProcessor{}
+	}).Register()
+
+	ioc.Refresh()
 	m.Run()
 
 	fmt.Println("After all")

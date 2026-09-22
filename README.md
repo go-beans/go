@@ -176,9 +176,39 @@ The non-singleton prototype scope of bean deployment results in the creation of 
 
 ## Lifecycle Callbacks
 
-The container calls `PostConstruct(method)` after bean instantiation and lets a bean perform initialization work after the container has set all necessary properties on the bean. `PreDestroy(method)` lets a bean get a callback when the container that contains it is destroyed before graceful shutdown.
+`PostConstruct(method)` is invoked after the bean has been instantiated and its dependencies have been injected. Non-lazy singleton beans are initialized during `ioc.Refresh()`. Lazy singleton beans are initialized when first required, including when another bean requests them during refresh. A lazy bean that is instantiated during refresh completes initialization before refresh finishes.
 
-> Be aware that `PostConstruct` and initialization methods in general are executed within the container’s singleton creation lock. The bean instance is only considered as fully initialized and ready to be published to others after returning from the `PostConstruct` method. Such individual initialization methods are only meant for validating the configuration state and possibly preparing some data structures based on the given configuration but no further activity with external bean access.
+`PreDestroy(method)` is invoked during `ioc.Close()` for singleton beans, allowing them to release resources before the application shuts down.
+
+Initialization callbacks run on the original bean instance, even when a `BeanPostProcessor` replaces the instance exposed by the container.
+
+## Bean Post-Processors
+
+A `BeanPostProcessor` can replace a singleton bean with another instance, such as a caching, monitoring, or security proxy.
+
+Post-processors run before and after bean initialization, either during ioc.Refresh() or when a lazy bean is initialized later. They may return the current instance unchanged or return a replacement assignable to the bean's registered type.
+
+When multiple post-processors replace the same bean, each processor receives the instance returned by the preceding processor. After Refresh() completes, dependency injection and providers returned by ioc.Resolve() expose the final bean replacement. A provider may intentionally retain an earlier instance; references it has already returned are not automatically updated.
+
+The original bean remains responsible for its initialization and destruction callbacks.
+
+After post-processing completes, the container updates injected singleton references to point to their final replacements. This includes injected fields in original beans and intermediate proxies.
+
+Only fields marked with `inject` are updated. Proxy delegate references should not use the `inject` tag when they intentionally refer to an earlier instance in the replacement chain.
+
+Prototype dependencies are not recreated during this final reinjection pass.
+
+### Initialization Order
+
+Injecting a bean does not, by itself, establish an initialization dependency. Use `DependsOn` when a bean requires another bean’s initialization to have completed before its own initialization callbacks execute.
+
+Beans are initialized in ascending order of their `Order(order)` value or `Ordered.Order()` result.
+
+Beans with the same order are initialized in registration order. When bean definitions are registered in package `init()` functions, their registration order follows the order in which those functions execute.
+
+`DependsOn("name")` declares an initialization dependency. The container ensures that the named bean completes initialization before executing the dependent bean’s initialization callbacks. Unlike `Order(order)`, which controls the general initialization sequence, `DependsOn` establishes an initialization dependency between specific beans.
+
+Use an explicit order when initialization callbacks must execute in a particular sequence. A bean may receive an injected dependency before that dependency's PostConstruct or AfterPropertiesSet() callback has executed.
 
 ## Application Lifecycle
 
@@ -196,51 +226,61 @@ Refresh phase:
    Non-lazy singleton beans are created.
 
 2. Aware callbacks
-   BeanNameAware, ApplicationContextAware
+   BeanNameAware, ApplicationContextAware.
 
 3. Configuration and dependency injection
    value tags, inject tags, configuration binding.
 
-4. PostConstruct
-   Custom post-construct callback is invoked.
+4. PostProcessBeforeInitialization
+   Post-processors may replace bean instances.
 
-5. InitializingBean.AfterPropertiesSet()
-   Bean receives final initialization callback.
+5. PostConstruct
+   The original bean receives its custom initialization callback.
 
-6. Lifecycle.Start()
-   Lifecycle beans are started by phase.
+6. InitializingBean.AfterPropertiesSet()
+   The original bean receives its final initialization callback.
 
-7. ContextRefreshedEvent
-   The context has been refreshed.
+7. PostProcessAfterInitialization
+   Post-processors may replace bean instances.
+
+8. Final dependency reinjection
+   Injected singleton references are updated to their final replacements,
+   including references held by intermediate proxies.
+
+9. Lifecycle.Start()
+    Lifecycle beans are started by phase.
+
+10. ContextRefreshedEvent
+    The context has been refreshed.
 
 Run phase:
 
-8. ApplicationStartedEvent
+11. ApplicationStartedEvent
    Application has started, before runners.
 
-9. ApplicationRunner.Run()
+12. ApplicationRunner.Run()
    Application runners are executed by order.
 
-10a. ApplicationReadyEvent
+13a. ApplicationReadyEvent
     Application is ready to serve.
 
-10b. ApplicationFailedEvent
+13b. ApplicationFailedEvent
      Startup failed.
 ```
 
 ### Shutdown Sequence
 
 ```text
-11. ContextClosedEvent
+14. ContextClosedEvent
     Context shutdown has been requested.
 
-12. Lifecycle.Stop()
+15. Lifecycle.Stop()
     Started lifecycle beans are stopped in reverse phase order.
 
-13. PreDestroy
+16. PreDestroy
     Custom pre-destroy callback is invoked.
 
-14. DisposableBean.Destroy()
+17. DisposableBean.Destroy()
     Bean receives final destroy callback.
 ```
 

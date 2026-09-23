@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -143,9 +144,21 @@ func (this *ApplicationContext) bean(inject *InjectQualifier[any]) any {
 }
 
 func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
+	return this.beanInstanceWithPath(bean, nil)
+}
+
+func (this *ApplicationContext) beanInstanceWithPath(bean BeanDefinition, path []string) any {
 	defer err.Catch(func(e any) {
 		panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Error creating bean %v", bean), e))
 	})
+	for _, name := range bean.getDependsOn() {
+		for _, visited := range path {
+			lang.Assert(visited != name, "Circular DependsOn dependency: %s -> %s", strings.Join(path, " -> "), name)
+		}
+		dependency, ok := this.named[name]
+		lang.Assert(ok, "No dependency bean named '%s' found", name)
+		this.beanInstanceWithPath(dependency, append(path, name))
+	}
 	if bean.getScope() == Singleton {
 		if bean.getInstance() == nil {
 			concurrent.Synchronized(bean.getMutex(), func() {

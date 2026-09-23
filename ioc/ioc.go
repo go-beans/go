@@ -9,51 +9,57 @@
 //     Non-lazy singleton beans are created.
 //
 //  2. Aware callbacks
-//     BeanNameAware, EnvironmentAware, ApplicationContextAware, ...
+//     BeanNameAware, ApplicationContextAware.
 //
 //  3. Configuration and dependency injection
-//     value tags, inject tags, configuration binding.
+//     Bean properties are configured and dependencies are injected.
 //
-//  4. PostConstruct
-//     Custom post-construct callback is invoked.
+//  4. PostProcessBeforeInitialization
+//     Post-processors may replace bean instances.
 //
-//  5. InitializingBean.AfterPropertiesSet()
-//     Bean receives final initialization callback.
+//  5. PostConstruct
+//     The original bean receives its custom initialization callback.
 //
-//  6. Lifecycle.Start()
+//  6. InitializingBean.AfterPropertiesSet()
+//     The original bean receives its final initialization callback.
+//
+//  7. PostProcessAfterInitialization
+//     Post-processors may replace bean instances.
+//
+//  8. Lifecycle.Start()
 //     Lifecycle beans are started by phase.
 //
-//  7. ContextRefreshedEvent
+//  9. ContextRefreshedEvent
 //     The context has been refreshed.
 //
 // Run phase:
 //
-//  8. ApplicationStartedEvent
+//  10. ApplicationStartedEvent
 //     Application has started, before runners.
 //
-//  9. ApplicationRunner.Run()
+//  11. ApplicationRunner.Run()
 //     Application runners are executed by order.
 //
-//  10. a) ApplicationReadyEvent
+//  12a. ApplicationReadyEvent
 //     Application is ready to serve.
 //
-//  10. b) ApplicationFailedEvent
+//  12b. ApplicationFailedEvent
 //     Startup failed.
 //
 // # Application running
 //
 // Close phase:
 //
-//  11. ContextClosedEvent
+//  13. ContextClosedEvent
 //     Context shutdown has been requested.
 //
-//  12. Lifecycle.Stop()
+//  14. Lifecycle.Stop()
 //     Started lifecycle beans are stopped in reverse phase order.
 //
-//  13. PreDestroy
+//  15. PreDestroy
 //     Custom pre-destroy callback is invoked.
 //
-//  14. DisposableBean.Destroy()
+//  16. DisposableBean.Destroy()
 //     Bean receives final destroy callback.
 package ioc
 

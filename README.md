@@ -206,9 +206,15 @@ Beans are initialized in ascending order of their `Order(order)` value or `Order
 
 Beans with the same order are initialized in registration order. When bean definitions are registered in package `init()` functions, their registration order follows the order in which those functions execute.
 
-`DependsOn("name")` declares an initialization dependency. The container ensures that the named bean completes initialization before executing the dependent bean’s initialization callbacks. Unlike `Order(order)`, which controls the general initialization sequence, `DependsOn` establishes an initialization dependency between specific beans.
+`DependsOn("name")` declares an explicit initialization dependency. The container ensures that the named bean completes initialization before executing the dependent bean’s initialization callbacks. Unlike `Order(order)`, which controls the general initialization sequence, `DependsOn` establishes an initialization dependency between specific beans.
 
-Use an explicit order when initialization callbacks must execute in a particular sequence. A bean may receive an injected dependency before that dependency's PostConstruct or AfterPropertiesSet() callback has executed.
+A missing named dependency or a circular `DependsOn` declaration causes bean initialization to fail.
+
+`DependsOn` applies to lazy beans as well. When a lazy bean is instantiated after the context has been refreshed, its declared dependencies are resolved and initialized before its own initialization completes. An invalid dependency declaration causes that operation to fail.
+
+Ordinary circular dependency injection is supported. However, circular `DependsOn` declarations cannot satisfy their initialization ordering requirements and therefore cause an error.
+
+Use an explicit order when initialization callbacks must execute in a particular sequence. A bean may receive an injected dependency before that dependency's `PostConstruct` or `AfterPropertiesSet()` callback has executed.
 
 ## Application Lifecycle
 
@@ -229,7 +235,7 @@ Refresh phase:
    BeanNameAware, ApplicationContextAware.
 
 3. Configuration and dependency injection
-   value tags, inject tags, configuration binding.
+   Bean properties are configured and dependencies are injected.
 
 4. PostProcessBeforeInitialization
    Post-processors may replace bean instances.
@@ -243,44 +249,40 @@ Refresh phase:
 7. PostProcessAfterInitialization
    Post-processors may replace bean instances.
 
-8. Final dependency reinjection
-   Injected singleton references are updated to their final replacements,
-   including references held by intermediate proxies.
+8. Lifecycle.Start()
+   Lifecycle beans are started by phase.
 
-9. Lifecycle.Start()
-    Lifecycle beans are started by phase.
-
-10. ContextRefreshedEvent
-    The context has been refreshed.
+9. ContextRefreshedEvent
+   The context has been refreshed.
 
 Run phase:
 
-11. ApplicationStartedEvent
-   Application has started, before runners.
+10. ApplicationStartedEvent
+    Application has started, before runners.
 
-12. ApplicationRunner.Run()
-   Application runners are executed by order.
+11. ApplicationRunner.Run()
+    Application runners are executed by order.
 
-13a. ApplicationReadyEvent
-    Application is ready to serve.
+12a. ApplicationReadyEvent
+     Application is ready to serve.
 
-13b. ApplicationFailedEvent
+12b. ApplicationFailedEvent
      Startup failed.
 ```
 
 ### Shutdown Sequence
 
 ```text
-14. ContextClosedEvent
+13. ContextClosedEvent
     Context shutdown has been requested.
 
-15. Lifecycle.Stop()
+14. Lifecycle.Stop()
     Started lifecycle beans are stopped in reverse phase order.
 
-16. PreDestroy
+15. PreDestroy
     Custom pre-destroy callback is invoked.
 
-17. DisposableBean.Destroy()
+16. DisposableBean.Destroy()
     Bean receives final destroy callback.
 ```
 

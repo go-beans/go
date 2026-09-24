@@ -186,17 +186,11 @@ Initialization callbacks run on the original bean instance, even when a `BeanPos
 
 A `BeanPostProcessor` can replace a singleton bean with another instance, such as a caching, monitoring, or security proxy.
 
-Post-processors run before and after bean initialization, either during ioc.Refresh() or when a lazy bean is initialized later. They may return the current instance unchanged or return a replacement assignable to the bean's registered type.
+Post-processors run before and after bean initialization, either during `ioc.Refresh()` or when a lazy bean is initialized later. They may return an updated instance or a replacement assignable to the bean's registered type.
 
-When multiple post-processors replace the same bean, each processor receives the instance returned by the preceding processor. After Refresh() completes, dependency injection and providers returned by ioc.Resolve() expose the final bean replacement. A provider may intentionally retain an earlier instance; references it has already returned are not automatically updated.
-
-The original bean remains responsible for its initialization and destruction callbacks.
-
-After post-processing completes, the container updates injected singleton references to point to their final replacements. This includes injected fields in original beans and intermediate proxies.
+When multiple post-processors replace the same bean, each processor receives the instance returned by the preceding processor. After `ioc.Refresh()` completes, dependency injection and providers returned by `ioc.Resolve()` expose the final bean replacement.
 
 Only fields marked with `inject` are updated. Proxy delegate references should not use the `inject` tag when they intentionally refer to an earlier instance in the replacement chain.
-
-Prototype dependencies are not recreated during this final reinjection pass.
 
 ### Initialization Order
 

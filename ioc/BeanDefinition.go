@@ -3,11 +3,11 @@ package ioc
 import (
 	"fmt"
 	"log/slog"
+	"path"
 	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"unicode"
 
 	"github.com/go-errr/go/err"
 	"github.com/go-external-config/go/env"
@@ -234,16 +234,14 @@ func (this *BeanDefinitionImpl[T]) getNames() []string {
 	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
-	name := t.Name()
-	if name == "" {
+	if t.Name() == "" {
 		return []string{t.String()}
 	}
-	runes := []rune(name)
-	if len(runes) > 1 && unicode.IsUpper(runes[0]) && unicode.IsUpper(runes[1]) {
-		return []string{name}
+	pkg := t.PkgPath()
+	if pkg == "" {
+		return []string{t.Name()}
 	}
-	runes[0] = unicode.ToLower(runes[0])
-	return []string{string(runes)}
+	return []string{path.Base(pkg) + "." + t.Name()}
 }
 
 func (this *BeanDefinitionImpl[T]) isPrimary() bool {

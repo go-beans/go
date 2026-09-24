@@ -545,6 +545,87 @@ Caused by: syscall.Errno: No connection could be made because the target machine
 exit status 1
 ```
 
+## Integration Testing
+
+Integration tests use the application's IoC configuration and may replace production beans with mocks or test-specific implementations.
+
+Use the `integration` build tag for integration-test files and the `TestIT` prefix for integration-test functions. This allows unit and integration tests to run independently.
+
+### Test Context
+
+Create a `package_test.go` file containing the integration-test context.
+
+`internal/example/example_test.go`:
+
+```go
+//go:build integration
+// +build integration
+
+package example_test
+
+import (
+	"example/internal/example"
+	_ "example/internal/example/context"
+	"example/internal/services"
+	"testing"
+
+	"github.com/go-beans/go/ioc"
+)
+
+var service = ioc.Resolve[*example.Service]()
+
+func init() {
+	ioc.Bean[example.ExternalClient]().Primary().Factory(NewMockExternalClient).Register()
+	ioc.Bean[*services.HttpServer]().Factory(NewMockHttpServer).Register()
+}
+
+func TestMain(m *testing.M) {
+	ioc.Refresh()
+	defer ioc.Close()
+	m.Run()
+}
+```
+
+Importing the application's context package registers its beans. The test context then registers a mock `ExternalClient` with `Primary()`, making it the preferred implementation when resolving dependencies by type and missing `HttpServer` bean.
+
+`TestMain` initializes the container before running tests and closes it afterward.
+
+### Integration Test
+
+`internal/example/Service_test.go`:
+
+```go
+//go:build integration
+// +build integration
+
+package example_test
+
+import "testing"
+
+func TestITService(t *testing.T) {
+	result := service().Execute()
+  // assert result
+}
+```
+
+### Running Tests
+
+**Unit tests only:**
+
+```bash
+go test ./...
+```
+
+The `integration` build constraint excludes integration-test files.
+
+**Integration tests only:**
+
+```bash
+go test -tags=integration -run '^TestIT' ./...
+```
+
+The build tag includes integration-test files, while the `TestIT` prefix filter excludes ordinary unit tests.
+
 ## Credits
 
 [The IoC Container](https://docs.spring.io/spring-framework/reference/core/beans.html)

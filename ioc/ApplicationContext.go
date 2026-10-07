@@ -29,7 +29,7 @@ var applicationContextMu sync.Mutex
 type ApplicationContext struct {
 	context             context.Context
 	cancel              context.CancelFunc
-	registered          []BeanDefinition
+	resolved            []BeanDefinition
 	instantiated        []BeanDefinition
 	started             []BeanDefinition
 	beans               map[reflect.Type][]BeanDefinition
@@ -37,6 +37,8 @@ type ApplicationContext struct {
 	postProcessors      []BeanDefinition
 	initializationReady bool
 	eventListenersCache map[reflect.Type][]eventListener
+	refreshing          atomic.Bool
+	definitionsResolved atomic.Bool
 	refreshed           atomic.Bool
 	startTime           time.Time
 	servicesCount       atomic.Int32
@@ -58,30 +60,16 @@ func applicationContextInstance() *ApplicationContext {
 func newApplicationContext() *ApplicationContext {
 	slog.Info(fmt.Sprintf("Starting with PID %d", os.Getpid()))
 	context, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+
 	return &ApplicationContext{
 		context:             context,
 		cancel:              cancel,
-		registered:          make([]BeanDefinition, 0),
+		resolved:            make([]BeanDefinition, 0),
 		instantiated:        make([]BeanDefinition, 0),
 		beans:               make(map[reflect.Type][]BeanDefinition),
 		named:               make(map[string]BeanDefinition),
 		eventListenersCache: make(map[reflect.Type][]eventListener),
 		startTime:           time.Now(),
-	}
-}
-
-func (this *ApplicationContext) register(bean BeanDefinition) {
-	if env.MatchesProfiles(bean.getProfiles()...) {
-		if len(bean.getNames()) > 0 {
-			for _, name := range bean.getNames() {
-				_, ok := this.named[name]
-				lang.Assert(!ok, "Bean with name '%s' already registered", name)
-				this.named[name] = bean
-			}
-		}
-		this.beans[bean.getType()] = append(this.beans[bean.getType()], bean)
-		this.registered = append(this.registered, bean)
-		slog.Debug(fmt.Sprintf("Registered %s", bean))
 	}
 }
 
@@ -93,6 +81,9 @@ func (this *ApplicationContext) bean(inject *InjectQualifier[any]) any {
 			panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Cannot inject dependency into field '%s' of type %s", inject.fieldName, inject.t), e))
 		}
 	})
+
+	lang.Assert(this.definitionsResolved.Load(), "ApplicationContext has not been refreshed yet")
+
 	if len(inject.name) > 0 {
 		bean, ok := this.named[inject.name]
 		if !ok && inject.optional {
@@ -103,7 +94,7 @@ func (this *ApplicationContext) bean(inject *InjectQualifier[any]) any {
 
 	} else if inject.t.Kind() == reflect.Slice {
 		elemType := inject.t.Elem()
-		orderedBeans := this.orderedBeanInstances(this.registered, func(bean BeanDefinition) bool {
+		orderedBeans := this.orderedBeanInstances(this.resolved, func(bean BeanDefinition) bool {
 			return this.eligible(bean.getType(), elemType)
 		})
 		result := reflect.MakeSlice(inject.t, 0, 0)
@@ -196,6 +187,11 @@ func (this *ApplicationContext) refresh() {
 
 func (this *ApplicationContext) doRefresh() {
 	threshold := time.Now()
+	concurrent.Synchronized(&registeredMu, func() {
+		lang.Assert(this.refreshing.CompareAndSwap(false, true), "ApplicationContext has already been refreshed")
+		this.resolveBeanDefinitions()
+	})
+
 	this.initializeBeans()
 	this.startLifecycleBeans()
 	this.refreshed.Store(true)
@@ -204,11 +200,27 @@ func (this *ApplicationContext) doRefresh() {
 	this.PublishEvent(NewContextRefreshedEvent(this))
 }
 
+func (this *ApplicationContext) resolveBeanDefinitions() {
+	for _, bean := range registered {
+		if !env.MatchesProfiles(bean.getProfiles()...) {
+			continue
+		}
+		for _, name := range bean.getNames() {
+			_, ok := this.named[name]
+			lang.Assert(!ok, "Bean with name '%s' already registered", name)
+			this.named[name] = bean
+		}
+		this.beans[bean.getType()] = append(this.beans[bean.getType()], bean)
+		this.resolved = append(this.resolved, bean)
+	}
+	this.definitionsResolved.Store(true)
+}
+
 func (this *ApplicationContext) initializeBeans() {
-	nonLazySingletons := this.orderedBeanInstances(this.registered, func(bean BeanDefinition) bool {
+	nonLazySingletons := this.orderedBeanInstances(this.resolved, func(bean BeanDefinition) bool {
 		return bean.getScope() == Singleton && !bean.isLazy() && !bean.isBeanPostProcessor()
 	})
-	this.postProcessors = this.orderedBeanInstances(this.registered, func(bean BeanDefinition) bool {
+	this.postProcessors = this.orderedBeanInstances(this.resolved, func(bean BeanDefinition) bool {
 		if !bean.isBeanPostProcessor() {
 			return false
 		}
@@ -284,7 +296,7 @@ func (this *ApplicationContext) startLifecycleBeans() {
 	executor := concurrent.NewExecutor(runtime.NumCPU(), 0)
 	defer executor.Shutdown()
 
-	phaseToBeans := this.phaseToLifecycleBeans(this.registered)
+	phaseToBeans := this.phaseToLifecycleBeans(this.resolved)
 	sortedPhases := make([]int, 0, len(phaseToBeans))
 	for phase := range phaseToBeans {
 		sortedPhases = append(sortedPhases, phase)
@@ -383,7 +395,7 @@ func (this *ApplicationContext) run() {
 }
 
 func (this *ApplicationContext) executeApplicationRunnerBeans() {
-	orderedBeans := this.orderedBeanInstances(this.registered, func(bean BeanDefinition) bool {
+	orderedBeans := this.orderedBeanInstances(this.resolved, func(bean BeanDefinition) bool {
 		return bean.isApplicationRunner()
 	})
 	for _, bean := range orderedBeans {
@@ -401,6 +413,7 @@ func (this *ApplicationContext) close() {
 			this.cancel()
 			this.stopLifecycleBeans()
 			this.destroyBeans()
+			resetBeanDefinitions()
 
 			slog.Info(fmt.Sprintf("Context closed in %v, uptime %v", time.Since(threshold), time.Since(this.startTime)))
 			applicationContext.CompareAndSwap(this, nil)

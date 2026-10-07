@@ -83,23 +83,25 @@ func Test_Ioc(t *testing.T) {
 		preinitializedMap := ioc.Resolve[*map[string]string]("preinitializedMap")
 		require.Equal(t, "value", (*preinitializedMap())["key"])
 
-		singletonCounter1 := ioc.Resolve[*Counter]("singletonCounter")
-		singletonCounter2 := ioc.Resolve[*Counter]("singletonCounter")
-		require.Equal(t, 0, singletonCounter1().count)
-		require.Equal(t, 0, singletonCounter2().count)
-		singletonCounter1().count++
-		singletonCounter2().count++
-		require.Equal(t, 2, singletonCounter1().count)
-		require.Equal(t, 2, singletonCounter2().count)
+		singletonCounter := ioc.Resolve[*Counter]("singletonCounter")
+		singletonCounter1 := singletonCounter()
+		singletonCounter2 := singletonCounter()
+		require.Equal(t, 0, singletonCounter1.count)
+		require.Equal(t, 0, singletonCounter2.count)
+		singletonCounter1.count++
+		singletonCounter2.count++
+		require.Equal(t, 2, singletonCounter1.count)
+		require.Equal(t, 2, singletonCounter2.count)
 
-		prototypeCounter1 := ioc.Resolve[*Counter]("prototypeCounter")
-		prototypeCounter2 := ioc.Resolve[*Counter]("prototypeCounter")
-		require.Equal(t, 0, prototypeCounter1().count)
-		require.Equal(t, 0, prototypeCounter2().count)
-		prototypeCounter1().count++
-		prototypeCounter2().count++
-		require.Equal(t, 1, prototypeCounter1().count)
-		require.Equal(t, 1, prototypeCounter2().count)
+		prototypeCounter := ioc.Resolve[*Counter]("prototypeCounter")
+		prototypeCounter1 := prototypeCounter()
+		prototypeCounter2 := prototypeCounter()
+		require.Equal(t, 0, prototypeCounter1.count)
+		require.Equal(t, 0, prototypeCounter2.count)
+		prototypeCounter1.count++
+		prototypeCounter2.count++
+		require.Equal(t, 1, prototypeCounter1.count)
+		require.Equal(t, 1, prototypeCounter2.count)
 
 		counterAlias := ioc.Resolve[*Counter]("counter")
 		require.Equal(t, 2, counterAlias().count)

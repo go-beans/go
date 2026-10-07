@@ -2,7 +2,6 @@ package ioc
 
 import (
 	"reflect"
-	"sync"
 
 	"github.com/go-errr/go/err"
 	"github.com/go-jang/go/lang"
@@ -30,28 +29,18 @@ func (this *InjectQualifier[T]) Optional() *InjectQualifier[T] {
 	return this
 }
 
-func (this *InjectQualifier[T]) resolveOrExit() func() T {
-	var instance T
-	var once sync.Once
+func (this *InjectQualifier[T]) resolveOrExit() Provider[T] {
 	return func() T {
-		once.Do(func() {
-			defer err.Recover(func(e any) {
-				applicationContextInstance().exit1(e, "Cannot resolve bean.")
-			})
-			instance = this.doResolve()
+		defer err.Recover(func(e any) {
+			applicationContextInstance().exit1(e, "Failed to resolve bean.")
 		})
-		return instance
+		return this.doResolve()
 	}
 }
 
-func (this *InjectQualifier[T]) resolve() func() T {
-	var instance T
-	var once sync.Once
+func (this *InjectQualifier[T]) resolve() Provider[T] {
 	return func() T {
-		once.Do(func() {
-			instance = this.doResolve()
-		})
-		return instance
+		return this.doResolve()
 	}
 }
 

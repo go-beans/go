@@ -13,6 +13,7 @@ import (
 	"github.com/go-external-config/go/env"
 	"github.com/go-jang/go/lang"
 	refl "github.com/go-jang/go/lang/reflect"
+	"github.com/go-jang/go/util/concurrent"
 )
 
 type Scope int
@@ -34,6 +35,9 @@ var lifecycleType = lang.TypeOf[Lifecycle]()
 var phasedType = lang.TypeOf[Phased]()
 var applicationRunnerType = lang.TypeOf[ApplicationRunner]()
 var orderedType = lang.TypeOf[Ordered]()
+
+var registered = make([]BeanDefinition, 0)
+var registeredMu sync.Mutex
 
 type BeanDefinition interface {
 	getScope() Scope
@@ -65,6 +69,7 @@ type BeanDefinition interface {
 	preDestroy()
 	getMutex() *sync.Mutex
 	getEventListenerMethods(eventType reflect.Type) []eventListenerMethod
+	reset()
 	String() string
 }
 
@@ -211,10 +216,10 @@ func (this *BeanDefinitionImpl[T]) PreDestroy(f func(T)) *BeanDefinitionImpl[T] 
 	return this
 }
 
-// Register the bean within the context
+// Register the bean
 func (this *BeanDefinitionImpl[T]) Register() {
 	lang.Assert(this.factoryMethod != nil, "Bean factory method must be provided")
-	applicationContextInstance().register(this)
+	register(this)
 }
 
 func (this *BeanDefinitionImpl[T]) getScope() Scope {
@@ -427,6 +432,13 @@ func (this *BeanDefinitionImpl[T]) getEventListenerMethods(eventType reflect.Typ
 	return methods
 }
 
+func (this *BeanDefinitionImpl[T]) reset() {
+	this.instance = nil
+	this.originalInstance = nil
+	this.instances = nil
+	this.initializationState.Store(int32(BeanNotInitialized))
+}
+
 // Implements String
 func (this *BeanDefinitionImpl[T]) String() string {
 	return fmt.Sprintf("%s [%s%s%s%s%s%s%s]", this.t,
@@ -446,4 +458,22 @@ type eventListenerMethod struct {
 
 func (this eventListenerMethod) invoke(bean any, event reflect.Value) {
 	this.method.Call([]reflect.Value{reflect.ValueOf(bean), event})
+}
+
+func register(bean BeanDefinition) {
+	concurrent.Synchronized(&registeredMu, func() {
+		context := applicationContext.Load()
+		lang.Assert(context == nil || !context.refreshing.Load(), "Cannot register bean after ApplicationContext refresh has started")
+
+		registered = append(registered, bean)
+		slog.Debug(fmt.Sprintf("Registered %s", bean))
+	})
+}
+
+func resetBeanDefinitions() {
+	concurrent.Synchronized(&registeredMu, func() {
+		for _, bean := range registered {
+			bean.reset()
+		}
+	})
 }

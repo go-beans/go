@@ -71,11 +71,12 @@ func TestMain(m *testing.M) {
 		return &SecondReinjectionPostProcessor{}
 	}).Register()
 
+	defer ioc.Close()
 	ioc.Refresh()
+
 	m.Run()
 
 	fmt.Println("After all")
-	ioc.Close()
 }
 
 func Test_Ioc(t *testing.T) {

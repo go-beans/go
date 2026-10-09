@@ -54,6 +54,10 @@ type BeanDefinition interface {
 	getPhase() *int
 	getOrder() *int
 	getProfiles() []string
+	getPropertyCondition() *PropertyCondition
+	getExpressionCondition() *ExpressionCondition
+	getBeanCondition() *BeanCondition
+	getMissingBeanCondition() *MissingBeanCondition
 	instantiate() any
 	injectDependencies()
 	reinjectDependencies()
@@ -83,6 +87,10 @@ type BeanDefinitionImpl[T any] struct {
 	phase                *int
 	order                *int
 	profiles             []string
+	propertyCondition    *PropertyCondition
+	expressionCondition  *ExpressionCondition
+	beanCondition        *BeanCondition
+	missingBeanCondition *MissingBeanCondition
 	factoryMethod        func() T
 	postConstructMethod  func(T)
 	preDestroyMethod     func(T)
@@ -170,6 +178,53 @@ func (this *BeanDefinitionImpl[T]) Order(order int) *BeanDefinitionImpl[T] {
 func (this *BeanDefinitionImpl[T]) Profile(profileExpr ...string) *BeanDefinitionImpl[T] {
 	lang.Assert(this.profiles == nil, "Profile is defined twice")
 	this.profiles = profileExpr
+	return this
+}
+
+// ConditionalOnProperty registers the bean only when the specified configuration
+// property exists or matches the expected value.
+//
+// When no expected value is provided, the condition also matches if any nested
+// property exists. This allows beans configured through env.ConfigurationProperties()
+// to be registered even when the configuration prefix has no direct value.
+func (this *BeanDefinitionImpl[T]) ConditionalOnProperty(name string, value ...string) *BeanDefinitionImpl[T] {
+	lang.Assert(this.propertyCondition == nil, "ConditionalOnProperty is defined twice")
+
+	this.propertyCondition = NewPropertyCondition(name, value...)
+	return this
+}
+
+// ConditionalOnExpression registers the bean only when the specified expression
+// evaluates to true.
+func (this *BeanDefinitionImpl[T]) ConditionalOnExpression(expression string) *BeanDefinitionImpl[T] {
+	lang.Assert(expression != "", "Expression must not be empty")
+	lang.Assert(this.expressionCondition == nil, "ConditionalOnExpression is defined twice")
+
+	this.expressionCondition = NewExpressionCondition(expression)
+	return this
+}
+
+// ConditionalOnBean registers the bean only when another bean of the specified
+// type is selected for registration.
+//
+// An optional name restricts the condition to a bean matching both the type
+// and the name.
+func (this *BeanDefinitionImpl[T]) ConditionalOnBean(t reflect.Type, name ...string) *BeanDefinitionImpl[T] {
+	lang.Assert(this.beanCondition == nil, "ConditionalOnBean is defined twice")
+
+	this.beanCondition = NewBeanCondition(t, name...)
+	return this
+}
+
+// ConditionalOnMissingBean registers the bean only when no bean of the specified
+// type has been selected for registration.
+//
+// An optional name restricts the condition to beans matching both the type
+// and the name. The condition takes into account registration order.
+func (this *BeanDefinitionImpl[T]) ConditionalOnMissingBean(t reflect.Type, name ...string) *BeanDefinitionImpl[T] {
+	lang.Assert(this.missingBeanCondition == nil, "ConditionalOnMissingBean is defined twice")
+
+	this.missingBeanCondition = NewMissingBeanCondition(t, name...)
 	return this
 }
 
@@ -291,6 +346,22 @@ func (this *BeanDefinitionImpl[T]) getOrder() *int {
 
 func (this *BeanDefinitionImpl[T]) getProfiles() []string {
 	return this.profiles
+}
+
+func (this *BeanDefinitionImpl[T]) getPropertyCondition() *PropertyCondition {
+	return this.propertyCondition
+}
+
+func (this *BeanDefinitionImpl[T]) getExpressionCondition() *ExpressionCondition {
+	return this.expressionCondition
+}
+
+func (this *BeanDefinitionImpl[T]) getBeanCondition() *BeanCondition {
+	return this.beanCondition
+}
+
+func (this *BeanDefinitionImpl[T]) getMissingBeanCondition() *MissingBeanCondition {
+	return this.missingBeanCondition
 }
 
 func (this *BeanDefinitionImpl[T]) instantiate() any {
@@ -466,7 +537,6 @@ func register(bean BeanDefinition) {
 		lang.Assert(context == nil || !context.refreshing.Load(), "Cannot register bean after ApplicationContext refresh has started")
 
 		registered = append(registered, bean)
-		slog.Debug(fmt.Sprintf("Registered %s", bean))
 	})
 }
 

@@ -28,7 +28,11 @@ An IoC container manages one or more beans. These beans are registered using the
 ioc.Bean[type]().
     Scope("scope").
     Name("name").
-    Profile("expression").
+    Profile("profileExpression").
+    ConditionalOnProperty("property", "optionalValue").
+    ConditionalOnExpression("expression").
+    ConditionalOnBean(reflect.TypeFor[SomeService](), "optionalName").
+    ConditionalOnMissingBean(reflect.TypeFor[OtherService](), "optionalName").
     Primary().
     Lazy().
     DependsOn("name").
@@ -40,6 +44,8 @@ ioc.Bean[type]().
     EventListener(method).
     Register()
 ```
+
+All configuration methods are optional except `Factory(method)` and the `Register()`.
 
 Within the container itself, these bean definitions are represented as `BeanDefinition` objects, which contain (among other information) the following metadata:
 
@@ -341,7 +347,7 @@ ioc.Bean[*ServiceA]().
 ```
 
 ```go
-// Method parameter type will be used to filer eligible events to pass to the consumer
+// Method parameter type will be used to filter eligible events to pass to the consumer
 func (this *ServiceA) OnApplicationReady(event *ioc.ApplicationReadyEvent) {
   slog.Info("application ready")
 }
@@ -413,7 +419,7 @@ Bean definition profiles provide a mechanism in the core container that allows f
 - Registering monitoring infrastructure only when deploying an application into a performance environment.
 - Registering customized implementations of beans for customer A versus customer B deployments.
 
-The profile string may contain a simple profile name (for example, `production`) or a profile expression. A profile expression allows for more complicated profile logic to be expressed (for example, `production & us-east`). The following operators are supported in profile expressions:
+The profile string may contain a simple profile name (for example, `production`) or a logical expression combining profile names (for example, `production & us-east`). The following operators are supported in profile expressions:
 
 - `!`: A logical NOT of the profile
 - `&`: A logical AND of the profiles
@@ -429,14 +435,97 @@ The `profiles.active` property follows the same ordering rules as other properti
 
 ### Programmatically Setting Profiles
 
-You can programmatically set active profiles by calling `env.SetActiveProfiles("...")` before your application runs. This can be useful for tests to mock `Bean`s or other scenarious.
+You can programmatically set active profiles by calling `env.SetActiveProfiles("...")` before your application runs. This can be useful for tests to mock `Bean`s or other scenarios.
+
+## Conditional Bean Registration
+
+Bean definitions can be registered conditionally based on configuration properties, expressions, or the presence or absence of other beans.
+
+Conditional registration allows applications and libraries to provide optional components, select implementations based on configuration, and supply fallback implementations when no matching bean is available.
+
+### Configuration Conditions
+
+`ConditionalOnProperty(name, optionalValue)` registers a bean when the specified configuration property exists or matches an expected value.
+
+An explicit expected value requires an exact match:
+
+```go
+ioc.Bean[*SomeService]().
+  ConditionalOnProperty("service.enabled", "true").
+  Factory(NewSomeService).
+  Register()
+```
+
+When no expected value is provided, nested properties also satisfy the condition. This supports configuration prefixes used by `env.ConfigurationProperties()`, even when the prefix itself has no direct value.
+
+```go
+ioc.Bean[*v9.Client]().ConditionalOnProperty("redis").Factory(func() *v9.Client {
+  return v9.NewClient(env.ConfigurationProperties("redis", &v9.Options{}))
+}).PreDestroy(func(c *v9.Client) { c.Close() }).Register()
+```
+
+For example, the condition matches the following configuration:
+
+```yaml
+redis:
+  addr: localhost:6379
+  password: secret
+```
+
+`ConditionalOnExpression(expression)` registers a bean when the specified expression evaluates to `true`. Expressions are evaluated by go-external-config through `env.Value[bool]`, using its general-purpose expression syntax rather than profile-expression syntax.
+
+```go
+ioc.Bean[*RedisService]().
+  ConditionalOnExpression("${redis.enabled:false} && ${cache.enabled:true}").
+  Factory(NewRedisService).
+  Register()
+```
+
+### Bean Conditions
+
+`ConditionalOnBean(type, optionalName)` registers a bean when another selected bean matches the specified type.
+
+```go
+ioc.Bean[*StorageManager]().
+  ConditionalOnBean(reflect.TypeFor[Storage]()).
+  Factory(NewStorageManager).
+  Register()
+```
+
+`ConditionalOnMissingBean(type, optionalName)` registers a bean when no previously selected bean matches the specified type.
+
+```go
+ioc.Bean[*StorageImpl]().
+  ConditionalOnMissingBean(reflect.TypeFor[Storage]()).
+  Factory(NewStorageImpl).
+  Register()
+```
+
+Both methods accept an optional bean name. When provided, the condition requires a match on both type and name.
+
+Bean conditions support interface types and concrete types, using Go's type assignability rules.
+
+### Condition Resolution
+
+Bean definitions are evaluated during application context initialization, before bean instantiation.
+
+- Profiles, property conditions, and expression conditions determine the initial candidates.
+- Definitions without bean-dependent conditions are selected first.
+- `ConditionalOnBean` conditions are evaluated repeatedly until no additional beans can be selected.
+- `ConditionalOnMissingBean` conditions are then evaluated in registration order. The process repeats when new beans are selected.
+- Beans selected through `ConditionalOnMissingBean` can activate other beans through `ConditionalOnBean`.
+- Once a bean definition is selected, it remains selected throughout resolution.
+
+Conditional registration does not change the original registration order of selected bean definitions.
+
+Multiple conditions on the same definition must all be satisfied.
 
 ## Transparent startup diagnostics
 
 `go-beans` uses Go's standard `log/slog` API. Logging levels are controlled by the application's `slog` configuration.
 
 Enable `INFO` logging to see application context lifecycle information, including the process ID, startup time, shutdown time, and uptime.  
-Enable `DEBUG` logging to list all registered beans.  
+Enable `DEBUG` logging to list all bean definitions selected for registration in the application context, excluding definitions rejected by profile or conditional constraints.  
 See also [go-log4g](https://github.com/go-log4g/core).
 
 One common concern about dependency injection frameworks is that startup failures become difficult to debug because abstraction layers hide the original cause.
@@ -569,18 +658,18 @@ import (
 var service = ioc.Resolve[*example.Service]()
 
 func init() {
-	ioc.Bean[example.ExternalClient]().Primary().Factory(NewMockExternalClient).Register()
+	ioc.Bean[*services.ExternalClient]().Primary().Factory(NewMockExternalClient).Register()
 	ioc.Bean[*services.HttpServer]().Factory(NewMockHttpServer).Register()
 }
 
 func TestMain(m *testing.M) {
-	ioc.Refresh()
 	defer ioc.Close()
+	ioc.Refresh()
 	m.Run()
 }
 ```
 
-Importing the application's context package registers its beans. The test context then registers a mock `ExternalClient` with `Primary()`, making it the preferred implementation when resolving dependencies by type and missing `HttpServer` bean.
+Importing the application's context package registers its beans. The test context then registers a mock `ExternalClient` with `Primary()`, making it the preferred implementation when resolving dependencies by type and registers a test-specific `HttpServer` bean.
 
 `TestMain` initializes the container before running tests and closes it afterward.
 

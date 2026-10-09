@@ -201,8 +201,34 @@ func (this *ApplicationContext) doRefresh() {
 }
 
 func (this *ApplicationContext) resolveBeanDefinitions() {
+	candidates := make([]BeanDefinition, 0)
+	selected := make(map[BeanDefinition]bool)
+
 	for _, bean := range registered {
 		if !env.MatchesProfiles(bean.getProfiles()...) {
+			continue
+		} else if condition := bean.getPropertyCondition(); condition != nil && !condition.Matches() {
+			continue
+		} else if condition := bean.getExpressionCondition(); condition != nil && !condition.Matches() {
+			continue
+		}
+		candidates = append(candidates, bean)
+		if bean.getBeanCondition() == nil && bean.getMissingBeanCondition() == nil {
+			selected[bean] = true
+		}
+	}
+
+	for {
+		size := len(selected)
+		selected = this.resolveConditionalBeanDefinitions(candidates, selected)
+		selected = this.resolveConditionalMissingBeanDefinitions(candidates, selected)
+		if len(selected) == size {
+			break
+		}
+	}
+
+	for _, bean := range candidates {
+		if !selected[bean] {
 			continue
 		}
 		for _, name := range bean.getNames() {
@@ -212,8 +238,60 @@ func (this *ApplicationContext) resolveBeanDefinitions() {
 		}
 		this.beans[bean.getType()] = append(this.beans[bean.getType()], bean)
 		this.resolved = append(this.resolved, bean)
+		slog.Debug(fmt.Sprintf("Registered %v", bean))
 	}
 	this.definitionsResolved.Store(true)
+}
+
+func (this *ApplicationContext) resolveConditionalBeanDefinitions(candidates []BeanDefinition, selected map[BeanDefinition]bool) map[BeanDefinition]bool {
+	for {
+		available := make([]BeanDefinition, 0, len(selected))
+		for _, bean := range candidates {
+			if selected[bean] {
+				available = append(available, bean)
+			}
+		}
+
+		size := len(selected)
+		for _, bean := range candidates {
+			if selected[bean] || bean.getMissingBeanCondition() != nil {
+				// Definitions with MissingBean conditions are resolved later to preserve logical AND semantics.
+				continue
+			} else if condition := bean.getBeanCondition(); condition != nil && condition.Matches(available) {
+				selected[bean] = true
+			}
+		}
+
+		if len(selected) == size {
+			break
+		}
+	}
+	return selected
+}
+
+func (this *ApplicationContext) resolveConditionalMissingBeanDefinitions(candidates []BeanDefinition, selected map[BeanDefinition]bool) map[BeanDefinition]bool {
+	available := make([]BeanDefinition, 0, len(selected))
+	for _, bean := range candidates {
+		if selected[bean] {
+			available = append(available, bean)
+		}
+	}
+
+	for _, bean := range candidates {
+		if selected[bean] {
+			continue
+		}
+		condition := bean.getMissingBeanCondition()
+		if condition == nil {
+			continue
+		} else if beanCondition := bean.getBeanCondition(); beanCondition != nil && !beanCondition.Matches(available) {
+			continue
+		} else if condition.Matches(available) {
+			selected[bean] = true
+			available = append(available, bean)
+		}
+	}
+	return selected
 }
 
 func (this *ApplicationContext) initializeBeans() {

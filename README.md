@@ -31,13 +31,13 @@ ioc.Bean[type]().
     Profile("profileExpression").
     ConditionalOnProperty("property", "optionalValue").
     ConditionalOnExpression("expression").
-    ConditionalOnBean(reflect.TypeFor[SomeService](), "optionalName").
-    ConditionalOnMissingBean(reflect.TypeFor[OtherService](), "optionalName").
+    ConditionalOnBean(type, "optionalName").
+    ConditionalOnMissingBean(type, "optionalName").
     Primary().
     Lazy().
     DependsOn("name").
-    Phase(phase).
     Order(order).
+    Phase(phase).
     Factory(method).
     PostConstruct(method).
     PreDestroy(method).

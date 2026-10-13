@@ -198,7 +198,7 @@ When multiple post-processors replace the same bean, each processor receives the
 
 Only fields marked with `inject` are updated. Proxy delegate references should not use the `inject` tag when they intentionally refer to an earlier instance in the replacement chain.
 
-### Initialization Order
+## Initialization Order
 
 Injecting a bean does not, by itself, establish an initialization dependency. Use `DependsOn` when a bean requires another bean’s initialization to have completed before its own initialization callbacks execute.
 
@@ -215,6 +215,24 @@ A missing named dependency or a circular `DependsOn` declaration causes bean ini
 Ordinary circular dependency injection is supported. However, circular `DependsOn` declarations cannot satisfy their initialization ordering requirements and therefore cause an error.
 
 Use an explicit order when initialization callbacks must execute in a particular sequence. A bean may receive an injected dependency before that dependency's `PostConstruct` or `AfterPropertiesSet()` callback has executed.
+
+## Start Order
+
+Beans implementing the `Lifecycle` interface participate in application startup and shutdown through their `Start()` and `Stop()` methods.
+
+`Phase(phase)` controls the order in which lifecycle beans are started and stopped. Beans are started in ascending phase order and stopped in descending phase order.
+
+Lifecycle beans within the same phase are started concurrently. The container waits for all beans in the current phase to complete startup before proceeding to the next phase.
+
+Unlike `Order(order)`, which controls bean initialization order, `Phase(phase)` controls lifecycle startup and shutdown order.
+
+## Run Order
+
+Beans implementing the `ApplicationRunner` interface are executed through their `Run()` method after the application context has been refreshed and all `Lifecycle` beans have started.
+
+Application runners execute in ascending order of their `Order(order)` value or `Ordered.Order()` result. Runners with the same order execute in registration order.
+
+Unlike `Lifecycle` beans, application runners are executed as part of `ioc.Run()` rather than `ioc.Refresh()`. All runners must complete before the `ApplicationReadyEvent` is published.
 
 ## Application Lifecycle
 

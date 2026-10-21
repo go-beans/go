@@ -36,13 +36,12 @@ type ApplicationContext struct {
 	beans               map[reflect.Type][]BeanDefinition
 	named               map[string]BeanDefinition
 	postProcessors      []BeanDefinition
-	initializationReady bool
+	initializationReady atomic.Bool
 	eventListenersCache *concurrent.HashMap[reflect.Type, []eventListener]
 	refreshing          atomic.Bool
 	definitionsResolved atomic.Bool
 	refreshed           atomic.Bool
 	startTime           time.Time
-	servicesCount       atomic.Int32
 	closing             atomic.Bool
 	exiting             atomic.Bool
 }
@@ -86,125 +85,146 @@ func (this *ApplicationContext) bean(inject *InjectQualifier[any]) any {
 	lang.Assert(this.definitionsResolved.Load(), "ApplicationContext has not been refreshed yet")
 
 	if len(inject.name) > 0 {
-		bean, ok := this.named[inject.name]
-		if !ok && inject.optional {
-			return nil
-		}
-		lang.Assert(ok, "No bean named '%s' found", inject.name)
-		return this.beanInstance(bean)
-
+		return this.beanByName(inject)
 	} else if inject.t.Kind() == reflect.Slice {
-		elemType := inject.t.Elem()
-		orderedBeans := this.orderedBeanInstances(this.resolved, func(bean BeanDefinition) bool {
-			return this.eligible(bean.getType(), elemType)
-		})
-		result := reflect.MakeSlice(inject.t, 0, 0)
-		for _, bean := range orderedBeans {
-			value := reflect.ValueOf(bean.getInstance())
-			lang.Assert(value.Type().AssignableTo(elemType), "Bean %s is not assignable to %s", value.Type(), elemType)
-			result = reflect.Append(result, value)
-		}
-		return result.Interface()
-
+		return this.beanSlice(inject)
 	} else {
-		var candidates []BeanDefinition
-		var primaryCandidates []BeanDefinition
+		return this.beanByType(inject)
+	}
+}
 
-		for t, beans := range this.beans {
-			if this.eligible(t, inject.t) {
-				candidates = append(candidates, beans...)
-				for _, bean := range beans {
-					if bean.isPrimary() {
-						primaryCandidates = append(primaryCandidates, bean)
-					}
+func (this *ApplicationContext) beanByName(inject *InjectQualifier[any]) any {
+	bean, ok := this.named[inject.name]
+	if !ok && inject.optional {
+		return nil
+	}
+
+	lang.Assert(ok, "No bean named '%s' found", inject.name)
+	return this.beanInstance(bean)
+}
+
+func (this *ApplicationContext) beanSlice(inject *InjectQualifier[any]) any {
+	elemType := inject.t.Elem()
+
+	orderedBeans := this.orderedBeanInstances(this.resolved, func(bean BeanDefinition) bool {
+		return this.eligible(bean.getType(), elemType)
+	})
+
+	result := reflect.MakeSlice(inject.t, 0, len(orderedBeans))
+	for _, bean := range orderedBeans {
+		instance := this.beanInstance(bean)
+		value := reflect.ValueOf(instance)
+
+		lang.Assert(value.IsValid() && value.Type().AssignableTo(elemType), "Bean %s is not assignable to %s", bean, elemType)
+		result = reflect.Append(result, value)
+	}
+
+	return result.Interface()
+}
+
+func (this *ApplicationContext) beanByType(inject *InjectQualifier[any]) any {
+	var candidates []BeanDefinition
+	var primaryCandidates []BeanDefinition
+
+	for t, beans := range this.beans {
+		if this.eligible(t, inject.t) {
+			candidates = append(candidates, beans...)
+			for _, bean := range beans {
+				if bean.isPrimary() {
+					primaryCandidates = append(primaryCandidates, bean)
 				}
 			}
 		}
+	}
 
-		lang.Assert(len(primaryCandidates) <= 1, "Multiple primary beans of type %v found. Use name qualifier.\n%v", inject.t, primaryCandidates)
-		if len(primaryCandidates) == 1 {
-			return this.beanInstance(primaryCandidates[0])
-		} else {
-			if len(candidates) == 0 && inject.optional {
-				return nil
-			}
-			lang.Assert(len(candidates) > 0, "No bean of type %v found", inject.t)
-			lang.Assert(len(candidates) <= 1, "Multiple beans of type %v found. Use name qualifier or mark one of the beans primary.\n%v", inject.t, candidates)
-			return this.beanInstance(candidates[0])
+	lang.Assert(len(primaryCandidates) <= 1, "Multiple primary beans of type %v found. Use name qualifier.\n%v", inject.t, primaryCandidates)
+	if len(primaryCandidates) == 1 {
+		return this.beanInstance(primaryCandidates[0])
+	} else {
+		if len(candidates) == 0 && inject.optional {
+			return nil
 		}
+
+		lang.Assert(len(candidates) > 0, "No bean of type %v found", inject.t)
+		lang.Assert(len(candidates) <= 1, "Multiple beans of type %v found. Use name qualifier or mark one of the beans primary.\n%v", inject.t, candidates)
+		return this.beanInstance(candidates[0])
 	}
 }
 
 func (this *ApplicationContext) beanInstance(bean BeanDefinition) any {
-	return this.beanInstanceWithPath(bean, []string{bean.getNames()[0]})
+	return this.beanInstanceWithPath(bean, []BeanDefinition{bean})
 }
 
-func (this *ApplicationContext) beanInstanceWithPath(bean BeanDefinition, path []string) (instance any) {
-	err.Try(func() {
-		this.validateDependencies(bean, path)
-
-		if bean.getScope() == Singleton {
-			if bean.getInstance() == nil {
-				concurrent.Synchronized(bean.getMutex(), func() {
-					if bean.getInstance() == nil {
-						this.servicesCount.Add(1)
-						bean.instantiate()
-						this.instantiateDependencies(bean, path)
-						bean.injectDependencies()
-						this.registerInstantiatedBean(bean)
-					}
-				})
-			}
-			instance = bean.getInstance()
-		} else {
-			concurrent.Synchronized(bean.getMutex(), func() {
-				instance = bean.instantiate()
-				this.instantiateDependencies(bean, path)
-				bean.injectDependencies()
-				bean.initialize()
-			})
-		}
-	}, func(e any) {
+func (this *ApplicationContext) beanInstanceWithPath(bean BeanDefinition, path []BeanDefinition) (instance any) {
+	defer err.Catch(func(e any) {
 		panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Error creating bean %v", bean), e))
 	})
 
-	if bean.getScope() == Singleton && this.initializationReady && bean.getInitializationState() == BeanNotInitialized {
-		this.initializeBean(bean)
-		this.reinjectDependencies()
+	if bean.getScope() == Singleton {
+		if bean.getInstance() == nil {
+			concurrent.Synchronized(bean.getMutex(), func() {
+				if bean.getInstance() == nil {
+					instance := bean.instantiate()
+					bean.setInstance(instance)
+					bean.addInstance(instance)
+					this.addInstantiated(bean)
+					this.eventListenersCache.Clear()
+				}
+			})
+		}
+		instance = bean.getInstance()
+		if bean.tryInjection() {
+			this.instantiateDependencies(bean, path)
+			bean.injectDependencies(instance)
+			if this.initializationReady.Load() {
+				instance = this.initializeBean(bean, instance)
+				this.reinjectDependencies()
+			}
+		}
+	} else {
+		concurrent.Synchronized(bean.getMutex(), func() {
+			instance = bean.instantiate()
+			this.instantiateDependencies(bean, path)
+			bean.injectDependencies(instance)
+			instance = this.initializeBean(bean, instance)
+		})
 	}
 
 	return instance
 }
 
-func (this *ApplicationContext) validateDependencies(bean BeanDefinition, path []string) {
-	for _, name := range bean.getDependsOn() {
-		for _, visited := range path {
-			lang.Assert(visited != name, "Circular DependsOn dependency: %s", strings.Join(append(path, name), " -> "))
-		}
-	}
-}
-
-func (this *ApplicationContext) instantiateDependencies(bean BeanDefinition, path []string) {
+func (this *ApplicationContext) instantiateDependencies(bean BeanDefinition, path []BeanDefinition) {
 	for _, name := range bean.getDependsOn() {
 		dependency, ok := this.named[name]
 		lang.Assert(ok, "No dependency bean named '%s' found", name)
-		this.beanInstanceWithPath(dependency, append(path, name))
+
+		for _, visited := range path {
+			if visited == dependency {
+				names := make([]string, 0, len(path)+1)
+				for _, item := range path {
+					names = append(names, item.getNames()[0])
+				}
+				names = append(names, dependency.getNames()[0])
+				panic(err.NewIllegalStateException(fmt.Sprintf("Circular DependsOn dependency: %s", strings.Join(names, " -> "))))
+			}
+		}
+
+		this.beanInstanceWithPath(dependency, append(path, dependency))
 	}
 }
 
-func (this *ApplicationContext) registerInstantiatedBean(bean BeanDefinition) {
+func (this *ApplicationContext) addInstantiated(bean BeanDefinition) {
 	this.instantiatedMu.Lock()
 	defer this.instantiatedMu.Unlock()
 
 	this.instantiated = append(this.instantiated, bean)
-	this.eventListenersCache.Clear()
 }
 
-func (this *ApplicationContext) instantiatedSnapshot() []BeanDefinition {
+func (this *ApplicationContext) getInstantiated() []BeanDefinition {
 	this.instantiatedMu.RLock()
 	defer this.instantiatedMu.RUnlock()
 
-	return this.instantiated
+	return append([]BeanDefinition(nil), this.instantiated...)
 }
 
 func (this *ApplicationContext) eligible(registered, requested reflect.Type) bool {
@@ -328,23 +348,22 @@ func (this *ApplicationContext) resolveConditionalMissingBeanDefinitions(candida
 }
 
 func (this *ApplicationContext) initializeBeans() {
+	this.initializePostProcessors()
+
 	nonLazySingletons := this.orderedBeanInstances(this.resolved, func(bean BeanDefinition) bool {
 		return bean.getScope() == Singleton && !bean.isLazy() && !bean.isBeanPostProcessor()
 	})
-
-	this.initializePostProcessors()
-
 	for _, bean := range nonLazySingletons {
-		this.initializeBean(bean)
+		this.initializeBean(bean, bean.getInstance())
 	}
-	for i := 0; i < len(this.instantiatedSnapshot()); i++ {
-		bean := this.instantiatedSnapshot()[i]
+	for i := 0; i < len(this.getInstantiated()); i++ {
+		bean := this.getInstantiated()[i]
 		if bean.isLazy() && !bean.isBeanPostProcessor() {
-			this.initializeBean(bean)
+			this.initializeBean(bean, bean.getInstance())
 		}
 	}
 	this.reinjectDependencies()
-	this.initializationReady = true
+	this.initializationReady.Store(true)
 }
 
 func (this *ApplicationContext) initializePostProcessors() {
@@ -358,7 +377,12 @@ func (this *ApplicationContext) initializePostProcessors() {
 
 	for _, processor := range this.postProcessors {
 		err.Try(func() {
-			processor.initialize()
+			if !processor.compareAndSwapInitializationState(BeanNotInitialized, BeanInitializing) {
+				return
+			}
+			defer processor.completeInitialization()
+
+			processor.initialize(processor.getInstance())
 			processor.setInitializationState(BeanInitialized)
 		}, func(e any) {
 			panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Error initializing bean %v", processor), e))
@@ -366,10 +390,14 @@ func (this *ApplicationContext) initializePostProcessors() {
 	}
 }
 
-func (this *ApplicationContext) initializeBean(bean BeanDefinition) {
-	if !bean.compareAndSwapInitializationState(BeanNotInitialized, BeanInitializing) {
-		return
+func (this *ApplicationContext) initializeBean(bean BeanDefinition, instance any) any {
+	if bean.getScope() == Singleton {
+		if !bean.compareAndSwapInitializationState(BeanNotInitialized, BeanInitializing) {
+			return bean.getInstance()
+		}
+		defer bean.completeInitialization()
 	}
+
 	defer err.Catch(func(e any) {
 		panic(err.NewRuntimeExceptionFrom(fmt.Sprintf("Error initializing bean %v", bean), e))
 	})
@@ -379,51 +407,69 @@ func (this *ApplicationContext) initializeBean(bean BeanDefinition) {
 		lang.Assert(ok, "No dependency bean named '%s' found", name)
 		if dependency.getScope() == Singleton {
 			this.beanInstance(dependency)
-			this.initializeBean(dependency)
+			this.initializeBean(dependency, dependency.getOriginalInstance())
+			dependency.waitForInitialization()
+			lang.Assert(dependency.getInitializationState() == BeanInitialized, "Dependency bean %s initialization failed", dependency)
 		}
 	}
 
-	this.postProcessBeforeInitialization(bean)
-	bean.initialize()
-	this.postProcessAfterInitialization(bean)
+	originalInstance := instance
+	instance = this.postProcessBeforeInitialization(bean, instance)
+	bean.initialize(originalInstance)
+	instance = this.postProcessAfterInitialization(bean, instance)
 
-	bean.setInitializationState(BeanInitialized)
+	if bean.getScope() == Singleton {
+		bean.setInstance(instance)
+		bean.setInitializationState(BeanInitialized)
+	}
+
+	return instance
 }
 
-func (this *ApplicationContext) postProcessBeforeInitialization(bean BeanDefinition) {
+func (this *ApplicationContext) postProcessBeforeInitialization(bean BeanDefinition, instance any) any {
 	for _, processor := range this.postProcessors {
-		current := bean.getInstance()
-		replacement := processor.getInstance().(BeanPostProcessor).PostProcessBeforeInitialization(current, bean.getNames()[0])
+		replacement := processor.getInstance().(BeanPostProcessor).PostProcessBeforeInitialization(instance, bean.getNames()[0])
 		if replacement == nil {
 			break
 		}
-		if reflect.TypeOf(current) == reflect.TypeOf(replacement) && reflect.TypeOf(current).Comparable() && current == replacement {
+		if reflect.TypeOf(instance) == reflect.TypeOf(replacement) && reflect.TypeOf(instance).Comparable() && instance == replacement {
 			continue
 		}
 		lang.Assert(reflect.TypeOf(replacement).AssignableTo(bean.getType()), "BeanPostProcessor %T returned incompatible replacement %T for bean '%s' of type %s", processor.getInstance(), replacement, bean.getNames()[0], bean.getType())
-		bean.setInstance(replacement)
-		bean.injectDependencies()
+
+		instance = replacement
+		if bean.getScope() == Singleton {
+			bean.addInstance(instance)
+		}
+		bean.injectDependencies(instance)
 	}
+
+	return instance
 }
 
-func (this *ApplicationContext) postProcessAfterInitialization(bean BeanDefinition) {
+func (this *ApplicationContext) postProcessAfterInitialization(bean BeanDefinition, instance any) any {
 	for _, processor := range this.postProcessors {
-		current := bean.getInstance()
-		replacement := processor.getInstance().(BeanPostProcessor).PostProcessAfterInitialization(current, bean.getNames()[0])
+		replacement := processor.getInstance().(BeanPostProcessor).PostProcessAfterInitialization(instance, bean.getNames()[0])
 		if replacement == nil {
 			break
 		}
-		if reflect.TypeOf(current) == reflect.TypeOf(replacement) && reflect.TypeOf(current).Comparable() && current == replacement {
+		if reflect.TypeOf(instance) == reflect.TypeOf(replacement) && reflect.TypeOf(instance).Comparable() && instance == replacement {
 			continue
 		}
 		lang.Assert(reflect.TypeOf(replacement).AssignableTo(bean.getType()), "BeanPostProcessor %T returned incompatible replacement %T for bean '%s' of type %s", processor.getInstance(), replacement, bean.getNames()[0], bean.getType())
-		bean.setInstance(replacement)
-		bean.injectDependencies()
+
+		instance = replacement
+		if bean.getScope() == Singleton {
+			bean.addInstance(instance)
+		}
+		bean.injectDependencies(instance)
 	}
+
+	return instance
 }
 
 func (this *ApplicationContext) reinjectDependencies() {
-	for _, bean := range this.instantiatedSnapshot() {
+	for _, bean := range this.getInstantiated() {
 		bean.reinjectDependencies()
 	}
 }
@@ -553,7 +599,7 @@ func (this *ApplicationContext) close() {
 	concurrent.Synchronized(&applicationContextMu, func() {
 		if this.closing.CompareAndSwap(false, true) {
 			threshold := time.Now()
-			slog.Info(fmt.Sprintf("Closing context with %d running services", this.servicesCount.Load()))
+			slog.Info(fmt.Sprintf("Closing context with %d running services", len(this.getInstantiated())))
 			this.publishEvent(NewContextClosedEvent(), true)
 
 			this.cancel()
@@ -636,7 +682,7 @@ func (this *ApplicationContext) stopLifecycleBeans() {
 }
 
 func (this *ApplicationContext) destroyBeans() {
-	this.foreachBeanDefinition(collections.ReverseSlice(this.instantiatedSnapshot()),
+	this.foreachBeanDefinition(collections.ReverseSlice(this.getInstantiated()),
 		func(bean BeanDefinition) bool { return bean.preDestroyEligible() },
 		func(bean BeanDefinition) {
 			bean.preDestroy()
@@ -677,25 +723,21 @@ func (this *ApplicationContext) eventListeners(eventType reflect.Type) []eventLi
 }
 
 func (this *ApplicationContext) resolveEventListeners(eventType reflect.Type) []eventListener {
-	listenerMethodsByBean := make(map[any][]eventListenerMethod)
-	definitionByBean := make(map[any]BeanDefinition)
+	listenerMethodsByBean := make(map[BeanDefinition][]eventListenerMethod)
 
-	orderedBeans := this.orderedBeanInstances(this.instantiatedSnapshot(), func(bean BeanDefinition) bool {
-		instance := bean.getInstance()
+	orderedBeans := this.orderedBeanInstances(this.getInstantiated(), func(bean BeanDefinition) bool {
 		methods := bean.getEventListenerMethods(eventType)
-		definitionByBean[instance] = bean
-		listenerMethodsByBean[instance] = methods
+		listenerMethodsByBean[bean] = methods
 		return len(methods) > 0
 	})
 
 	listeners := make([]eventListener, 0)
 
 	for _, bean := range orderedBeans {
-		instance := bean.getInstance()
-		for _, method := range listenerMethodsByBean[instance] {
+		for _, method := range listenerMethodsByBean[bean] {
 			listeners = append(listeners, eventListener{
-				beanDefinition: definitionByBean[instance],
-				instance:       instance,
+				beanDefinition: bean,
+				instance:       bean.getInstance(),
 				method:         method,
 			})
 		}

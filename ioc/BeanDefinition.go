@@ -59,16 +59,20 @@ type BeanDefinition interface {
 	getBeanCondition() *BeanCondition
 	getMissingBeanCondition() *MissingBeanCondition
 	instantiate() any
-	injectDependencies()
+	injectDependencies(instance any)
 	reinjectDependencies()
-	initialize()
+	initialize(instance any)
 	getInstance() any
 	setInstance(instance any)
 	getOriginalInstance() any
 	getInstances() []any
+	addInstance(any)
+	tryInjection() bool
 	getInitializationState() BeanInitializationState
 	compareAndSwapInitializationState(old, new BeanInitializationState) bool
 	setInitializationState(state BeanInitializationState)
+	waitForInitialization()
+	completeInitialization()
 	preDestroyEligible() bool
 	preDestroy()
 	getMutex() *sync.Mutex
@@ -94,18 +98,23 @@ type BeanDefinitionImpl[T any] struct {
 	factoryMethod        func() T
 	postConstructMethod  func(T)
 	preDestroyMethod     func(T)
-	instance             any
-	originalInstance     any
+	instance             atomic.Pointer[T]
+	originalInstance     T
 	instances            []any
+	instancesMu          sync.RWMutex
+	injection            atomic.Bool
 	initializationState  atomic.Int32
+	initializationWg     sync.WaitGroup
 	mutex                sync.Mutex
 	eventListenerMethods []eventListenerMethod
 }
 
 func newBeanDefinition[T any]() *BeanDefinitionImpl[T] {
-	return &BeanDefinitionImpl[T]{
+	this := &BeanDefinitionImpl[T]{
 		t: lang.TypeOf[T](),
 	}
+	this.initializationWg.Add(1)
+	return this
 }
 
 // Set optional scope
@@ -274,6 +283,7 @@ func (this *BeanDefinitionImpl[T]) PreDestroy(f func(T)) *BeanDefinitionImpl[T] 
 // Register the bean
 func (this *BeanDefinitionImpl[T]) Register() {
 	lang.Assert(this.factoryMethod != nil, "Bean factory method must be provided")
+	lang.Assert(this.scope == Singleton || len(this.eventListenerMethods) == 0, "EventListener bean must be a singleton: %s", this)
 	register(this)
 }
 
@@ -366,9 +376,7 @@ func (this *BeanDefinitionImpl[T]) getMissingBeanCondition() *MissingBeanConditi
 
 func (this *BeanDefinitionImpl[T]) instantiate() any {
 	instance := this.factoryMethod()
-	this.originalInstance = instance
-	this.instance = instance
-	this.instances = []any{instance}
+
 	var obj any = instance
 	if bean, ok := obj.(BeanNameAware); ok && len(this.names) > 0 {
 		bean.SetBeanName(this.names[0])
@@ -379,16 +387,17 @@ func (this *BeanDefinitionImpl[T]) instantiate() any {
 	return instance
 }
 
-func (this *BeanDefinitionImpl[T]) injectDependencies() {
-	value := reflect.ValueOf(this.instance)
+func (this *BeanDefinitionImpl[T]) injectDependencies(instance any) {
+	value := reflect.ValueOf(instance)
+
 	if value.Kind() == reflect.Pointer && !value.IsNil() && value.Elem().Kind() == reflect.Struct {
-		env.BindPropertiesAny(this.instance)
-		injectBeansAny(this.instance)
+		env.BindPropertiesAny(instance)
+		injectBeansAny(instance)
 	}
 }
 
 func (this *BeanDefinitionImpl[T]) reinjectDependencies() {
-	for _, instance := range this.instances {
+	for _, instance := range this.getInstances() {
 		value := reflect.ValueOf(instance)
 		if value.Kind() == reflect.Pointer && !value.IsNil() && value.Elem().Kind() == reflect.Struct {
 			this.reinjectBeansAny(instance)
@@ -408,7 +417,7 @@ func (this *BeanDefinitionImpl[T]) reinjectBeansAny(target any) {
 		if current.Kind() != reflect.Pointer || current.IsNil() {
 			return
 		}
-		for _, dependency := range applicationContextInstance().instantiated {
+		for _, dependency := range applicationContextInstance().getInstantiated() {
 			for _, instance := range dependency.getInstances() {
 				candidate := reflect.ValueOf(instance)
 				if candidate.Kind() != reflect.Pointer || candidate.IsNil() {
@@ -432,11 +441,15 @@ func (this *BeanDefinitionImpl[T]) reinjectBeansAny(target any) {
 	})
 }
 
-func (this *BeanDefinitionImpl[T]) initialize() {
+func (this *BeanDefinitionImpl[T]) initialize(instance any) {
+	typedInstance, ok := instance.(T)
+	lang.Assert(ok, "Cannot assign bean instance %T to %s", instance, this.t)
+
 	if this.postConstructMethod != nil {
-		this.postConstructMethod(this.originalInstance.(T))
+		this.postConstructMethod(typedInstance)
 	}
-	if bean, ok := this.originalInstance.(InitializingBean); ok {
+
+	if bean, ok := instance.(InitializingBean); ok {
 		bean.AfterPropertiesSet()
 	}
 }
@@ -452,7 +465,7 @@ func (this *BeanDefinitionImpl[T]) preDestroy() {
 		slog.Error(fmt.Sprintf("Could not destroy bean %v. %s", this, err.PrintStackTrace(e)))
 	})
 	if this.preDestroyMethod != nil {
-		this.preDestroyMethod(this.originalInstance.(T))
+		this.preDestroyMethod(this.originalInstance)
 	}
 	var obj any = this.originalInstance
 	if bean, ok := obj.(DisposableBean); ok {
@@ -461,12 +474,19 @@ func (this *BeanDefinitionImpl[T]) preDestroy() {
 }
 
 func (this *BeanDefinitionImpl[T]) getInstance() any {
-	return this.instance
+	instance := this.instance.Load()
+	if instance == nil {
+		return nil
+	}
+	return *instance
 }
 
 func (this *BeanDefinitionImpl[T]) setInstance(instance any) {
-	this.instance = instance
-	this.instances = append(this.instances, instance)
+	typedInstance := instance.(T)
+	if this.instance.Load() == nil {
+		this.originalInstance = typedInstance
+	}
+	this.instance.Store(&typedInstance)
 }
 
 func (this *BeanDefinitionImpl[T]) getOriginalInstance() any {
@@ -474,7 +494,21 @@ func (this *BeanDefinitionImpl[T]) getOriginalInstance() any {
 }
 
 func (this *BeanDefinitionImpl[T]) getInstances() []any {
-	return this.instances
+	this.instancesMu.RLock()
+	defer this.instancesMu.RUnlock()
+
+	return append([]any(nil), this.instances...)
+}
+
+func (this *BeanDefinitionImpl[T]) addInstance(instance any) {
+	this.instancesMu.Lock()
+	defer this.instancesMu.Unlock()
+
+	this.instances = append(this.instances, instance.(T))
+}
+
+func (this *BeanDefinitionImpl[T]) tryInjection() bool {
+	return this.injection.CompareAndSwap(false, true)
 }
 
 func (this *BeanDefinitionImpl[T]) getInitializationState() BeanInitializationState {
@@ -487,6 +521,14 @@ func (this *BeanDefinitionImpl[T]) compareAndSwapInitializationState(old, new Be
 
 func (this *BeanDefinitionImpl[T]) setInitializationState(state BeanInitializationState) {
 	this.initializationState.Store(int32(state))
+}
+
+func (this *BeanDefinitionImpl[T]) completeInitialization() {
+	this.initializationWg.Done()
+}
+
+func (this *BeanDefinitionImpl[T]) waitForInitialization() {
+	this.initializationWg.Wait()
 }
 
 func (this *BeanDefinitionImpl[T]) getMutex() *sync.Mutex {
@@ -504,10 +546,19 @@ func (this *BeanDefinitionImpl[T]) getEventListenerMethods(eventType reflect.Typ
 }
 
 func (this *BeanDefinitionImpl[T]) reset() {
-	this.instance = nil
-	this.originalInstance = nil
+	this.instance.Store(nil)
+
+	var zero T
+	this.originalInstance = zero
+
+	this.instancesMu.Lock()
 	this.instances = nil
+	this.instancesMu.Unlock()
+
+	this.injection.Store(false)
 	this.initializationState.Store(int32(BeanNotInitialized))
+	this.initializationWg = sync.WaitGroup{}
+	this.initializationWg.Add(1)
 }
 
 // Implements String

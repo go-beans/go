@@ -3,7 +3,6 @@ package ioc
 import (
 	"fmt"
 	"log/slog"
-	"path"
 	"reflect"
 	"strings"
 	"sync"
@@ -300,18 +299,23 @@ func (this *BeanDefinitionImpl[T]) getNames() []string {
 	if len(this.names) > 0 {
 		return this.names
 	}
+	return []string{this.getFullTypeName()}
+}
+
+func (this *BeanDefinitionImpl[T]) getFullTypeName() string {
 	t := this.getType()
+	prefix := ""
 	for t.Kind() == reflect.Pointer {
+		prefix += "*"
 		t = t.Elem()
 	}
 	if t.Name() == "" {
-		return []string{t.String()}
+		return prefix + t.String()
 	}
-	pkg := t.PkgPath()
-	if pkg == "" {
-		return []string{t.Name()}
+	if t.PkgPath() == "" {
+		return prefix + t.Name()
 	}
-	return []string{path.Base(pkg) + "." + t.Name()}
+	return prefix + t.PkgPath() + "." + t.Name()
 }
 
 func (this *BeanDefinitionImpl[T]) isPrimary() bool {
@@ -563,14 +567,15 @@ func (this *BeanDefinitionImpl[T]) reset() {
 
 // Implements String
 func (this *BeanDefinitionImpl[T]) String() string {
-	return fmt.Sprintf("%s [%s%s%s%s%s%s%s]", this.t,
+	return fmt.Sprintf("%s [%s%s%s%s%s%s]%s",
+		this.getFullTypeName(),
 		lang.If(this.scope == Singleton, "singleton", "prototype"),
-		lang.If(len(this.names) > 0, " "+strings.Join(this.names, ", "), ""),
 		lang.If(this.primary, " primary", ""),
 		lang.If(this.lazy, " lazy", ""),
 		lang.If(this.isLifecycleBean(), " Lifecycle", ""),
 		lang.If(this.isApplicationRunner(), " ApplicationRunner", ""),
-		lang.If(this.isBeanPostProcessor(), " BeanPostProcessor", ""))
+		lang.If(this.isBeanPostProcessor(), " BeanPostProcessor", ""),
+		lang.If(len(this.names) > 0, " "+strings.Join(this.names, ", "), ""))
 }
 
 type eventListenerMethod struct {

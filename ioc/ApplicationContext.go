@@ -215,9 +215,10 @@ func (this *ApplicationContext) instantiateDependencies(bean BeanDefinition, pat
 
 func (this *ApplicationContext) addInstantiated(bean BeanDefinition) {
 	this.instantiatedMu.Lock()
-	defer this.instantiatedMu.Unlock()
-
 	this.instantiated = append(this.instantiated, bean)
+	this.instantiatedMu.Unlock()
+
+	slog.Debug(fmt.Sprintf("Created %v", bean))
 }
 
 func (this *ApplicationContext) getInstantiated() []BeanDefinition {
@@ -249,7 +250,7 @@ func (this *ApplicationContext) doRefresh() {
 	this.startLifecycleBeans()
 	this.refreshed.Store(true)
 
-	slog.Info(fmt.Sprintf("Context refreshed in %v", time.Since(threshold)))
+	slog.Info(fmt.Sprintf("Context refreshed with %d beans in %v", len(this.getInstantiated()), time.Since(threshold)))
 	this.PublishEvent(NewContextRefreshedEvent(this))
 }
 
@@ -291,7 +292,7 @@ func (this *ApplicationContext) resolveBeanDefinitions() {
 		}
 		this.beans[bean.getType()] = append(this.beans[bean.getType()], bean)
 		this.resolved = append(this.resolved, bean)
-		slog.Debug(fmt.Sprintf("Registered %v", bean))
+		// slog.Debug(fmt.Sprintf("Registered %v", bean))
 	}
 	this.definitionsResolved.Store(true)
 }
@@ -599,7 +600,7 @@ func (this *ApplicationContext) close() {
 	concurrent.Synchronized(&applicationContextMu, func() {
 		if this.closing.CompareAndSwap(false, true) {
 			threshold := time.Now()
-			slog.Info(fmt.Sprintf("Closing context with %d running services", len(this.getInstantiated())))
+			slog.Info(fmt.Sprintf("Closing context with %d beans", len(this.getInstantiated())))
 			this.publishEvent(NewContextClosedEvent(), true)
 
 			this.cancel()

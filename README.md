@@ -627,25 +627,25 @@ Create a `package_test.go` file containing the integration-test context.
 package example_test
 
 import (
-	"example/internal/example"
-	_ "example/internal/example/context"
-	"example/internal/services"
-	"testing"
+  "example/internal/example"
+  _ "example/internal/example/context"
+  "example/internal/services"
+  "testing"
 
-	"github.com/go-beans/go/ioc"
+  "github.com/go-beans/go/ioc"
 )
 
 var service = ioc.Resolve[*example.Service]()
 
 func init() {
-	ioc.Bean[*services.ExternalClient]().Primary().Factory(NewMockExternalClient).Register()
-	ioc.Bean[*services.HttpServer]().Factory(NewMockHttpServer).Register()
+  ioc.Bean[*services.ExternalClient]().Primary().Factory(NewMockExternalClient).Register()
+  ioc.Bean[*services.HttpServer]().Factory(NewMockHttpServer).Register()
 }
 
 func TestMain(m *testing.M) {
-	defer ioc.Close()
-	ioc.Refresh()
-	m.Run()
+  defer ioc.Close()
+  ioc.Refresh()
+  m.Run()
 }
 ```
 
@@ -666,7 +666,7 @@ package example_test
 import "testing"
 
 func TestITService(t *testing.T) {
-	result := service().Execute()
+  result := service().Execute()
   // assert result
 }
 ```

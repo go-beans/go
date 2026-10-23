@@ -104,50 +104,37 @@ func Bean[T any]() *BeanDefinitionImpl[T] {
 	return newBeanDefinition[T]()
 }
 
-// Resolve returns a lazy bean provider for the specified bean type and
-// optionally bean name.
-//
-// The returned provider resolves the bean from the current ApplicationContext
-// when invoked:
+// Resolve returns a lazy bean provider for the specified bean type,
+// optionally qualified by name.
 //
 //	service := ioc.Resolve[MyService]()
 //	service().Process()
 //
-// Resolve supports lazy on-demand bean creation. Explicit Refresh() is not
-// required for ordinary bean usage because resolving a bean automatically
-// creates the requested bean and all required dependencies.
+// By default, Resolve fails if no matching bean is found.
+// Pass 'optional' as the second argument to allow a missing bean:
 //
-// This makes Resolve convenient for:
-//   - non-container-managed objects
-//   - integration tests
-//   - command-line utilities
-//   - one-off service method invocations
-//   - advanced/manual container usage
+//	service := ioc.Resolve[MyService]("", "optional")
 //
-// For example:
+// An empty name means no name qualifier is applied. If the bean is missing,
+// the optional provider returns the zero value of T.
 //
-//	ioc.Resolve[MyService]()().Process()
+// A named bean can be resolved using:
 //
-// may be sufficient without starting the full application lifecycle.
+//	service := ioc.Resolve[MyService]("myService")
 //
-// Refresh() is only required when eager singleton initialization,
-// bean post-processing, lifecycle startup, or application-wide container
-// initialization semantics are needed.
-//
-// By default Resolve fails if the bean cannot be found. Pass optional=true
-// to suppress failure and return the zero value instead.
-//
-// For container-managed beans prefer declarative dependency injection using
+// For container-managed beans, prefer declarative dependency injection using
 // inject tags instead of Resolve.
 func Resolve[T any](name ...string) Provider[T] {
 	lang.Assert(len(name) <= 2, "Bean name and 'optional' expected")
+	qualifier := newInjectQualifier[T]()
+	if len(name) > 0 && name[0] != "" {
+		qualifier.Name(name[0])
+	}
 	if len(name) == 2 {
 		lang.Assert(name[1] == Optional, "Unsupported option '%s'", name[1])
-		return newInjectQualifier[T]().Name(name[0]).Optional().resolveOrExit()
-	} else if len(name) == 1 {
-		return newInjectQualifier[T]().Name(name[0]).resolveOrExit()
+		qualifier.Optional()
 	}
-	return newInjectQualifier[T]().resolveOrExit()
+	return qualifier.resolveOrExit()
 }
 
 // InjectBeans injects matching beans into struct fields tagged with

@@ -26,23 +26,23 @@ An IoC container manages one or more beans. These beans are registered using the
 
 ```go
 ioc.Bean[type]().
-    Scope("scope").
-    Name("name").
-    Profile("profileExpression").
-    ConditionalOnProperty("property", "optionalValue").
-    ConditionalOnExpression("expression").
-    ConditionalOnBean(type, "optionalName").
-    ConditionalOnMissingBean(type, "optionalName").
-    Primary().
-    Lazy().
-    DependsOn("name").
-    Order(order).
-    Phase(phase).
-    Factory(method).
-    PostConstruct(method).
-    PreDestroy(method).
-    EventListener(method).
-    Register()
+  Scope("scope").
+  Name("name").
+  Profile("profileExpression").
+  ConditionalOnProperty("property", "optionalValue").
+  ConditionalOnExpression("expression").
+  ConditionalOnBean(type, "optionalName").
+  ConditionalOnMissingBean(type, "optionalName").
+  Primary().
+  Lazy().
+  DependsOn("name").
+  Order(order).
+  Phase(phase).
+  Factory(method).
+  PostConstruct(method).
+  PreDestroy(method).
+  EventListener(method).
+  Register()
 ```
 
 All configuration methods are optional except `Factory(method)` and the `Register()`.
@@ -107,16 +107,16 @@ project/internal/package/ServiceA.go:
 
 ```go
 type ServiceA struct {
-	httpClient      *http.Client         `inject:""`
-	redisClient     *redis.Client        `inject:""`
-	scheduler       *cron.Cron           `inject:""`
-	serviceB        *ServiceB            `inject:""`
-	publishExecutor *concurrent.Executor `inject:"publishExecutor"`
+  httpClient      *http.Client         `inject:""`
+  redisClient     *redis.Client        `inject:""`
+  scheduler       *cron.Cron           `inject:""`
+  serviceB        *ServiceB            `inject:""`
+  publishExecutor *concurrent.Executor `inject:"publishExecutor"`
 
-	schedule string `value:"${package.schedule:* * 31 2 *}"`
-	workDir  string `value:"${app.workDir:.}"`
+  schedule string `value:"${package.schedule:* * 31 2 *}"`
+  workDir  string `value:"${app.workDir:.}"`
 
-	cronEntryId cron.EntryID
+  cronEntryId cron.EntryID
 }
 
 func NewServiceA() *ServiceA {
@@ -561,88 +561,50 @@ gracefully stops them before the application exits.
 
 ```
 D:\dev\playground>go run ./cmd/app
-2026/05/17 14:39:22 INFO loading properties from config/application.yaml
-2026/05/17 14:39:22 INFO loading properties from config/application-live.properties
-2026/05/17 14:39:22 INFO starting with PID 11396
-2026/05/17 14:39:22 DEBUG registered *app.Service1 [singleton lazy]
-2026/05/17 14:39:22 DEBUG registered *app.Service2 [singleton Lifecycle]
-2026/05/17 14:39:22 DEBUG registered *app.Service3 [singleton Lifecycle]
-2026/05/17 14:39:22 DEBUG registered *app.Service4 [singleton service4]
-2026/05/17 14:39:22 DEBUG registered *app.Service5 [singleton service5]
-2026/05/17 14:39:22 DEBUG registered *app.ApplicationRunner1 [singleton lazy ApplicationRunner]
-2026/05/17 14:39:22 DEBUG registered *app.ApplicationRunner2 [singleton ApplicationRunner]
-2026/05/17 14:39:22 DEBUG registered *app.ApplicationRunner3 [singleton ApplicationRunner]
-2026/05/17 14:39:22 INFO Service2.AfterPropertiesSet
-2026/05/17 14:39:22 INFO Service3.AfterPropertiesSet
-2026/05/17 14:39:22 INFO Service5.AfterPropertiesSet
-2026/05/17 14:39:22 INFO Service4.AfterPropertiesSet
-2026/05/17 14:39:22 INFO ApplicationRunner2.AfterPropertiesSet
-2026/05/17 14:39:22 INFO ApplicationRunner3.AfterPropertiesSet
-2026/05/17 14:39:22 INFO Service3.Start
-2026/05/17 14:39:22 INFO Service2.Start
-2026/05/17 14:39:22 INFO context refreshed in 1.1175ms
-2026/05/17 14:39:26 ERROR Context run failed. *err.RuntimeException: Error creating bean *app.ApplicationRunner1 [singleton lazy ApplicationRunner]
-        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:140)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:149)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).Bean (D:/dev/go-beans/ioc/ApplicationContext.go:133)
-        at github.com/go-beans/go/ioc.(*InjectQualifier[...]).doResolve (D:/dev/go-beans/ioc/InjectQualifier.go:60)
-        at github.com/go-beans/go/ioc.(*InjectQualifier[...]).resolve.func1.1 (D:/dev/go-beans/ioc/InjectQualifier.go:52)
-        at sync.(*Once).doSlow (C:/Program Files/Go/src/sync/once.go:78)
-        at sync.(*Once).Do (C:/Program Files/Go/src/sync/once.go:69)
-        at github.com/go-beans/go/ioc.(*InjectQualifier[...]).resolve.func1 (D:/dev/go-beans/ioc/InjectQualifier.go:51)
-        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate.injectBeansAny.func2 (D:/dev/go-beans/ioc/ioc.go:84)
+LOG4G INFO  Loaded configuration from config/log4g.yaml
+2026-10-23 20:46:42.318 INFO  github.com/go-external-config/go/env/Environment:182 - Active profiles: prod, live
+2026-10-23 20:46:42.319 INFO  github.com/go-external-config/go/env/Environment:187 - Loaded configuration from config/application.yaml
+2026-10-23 20:46:42.338 INFO  github.com/go-external-config/go/env/Environment:187 - Loaded configuration from config/application-live.properties
+2026-10-23 20:46:42.342 INFO  github.com/go-beans/go/ioc:61 - Starting application (PID 13928)
+2026-10-23 20:46:42.343 DEBUG github.com/go-beans/go/ioc/ApplicationContext:221 - Created *github.com/go-perfstat/ioc/perfstat.PerfStatPostProcessor [singleton, BeanPostProcessor]
+2026-10-23 20:46:42.344 DEBUG github.com/go-beans/go/ioc/ApplicationContext:221 - Created *bytes.Buffer 'fallbackReader1' [singleton]
+2026-10-23 20:46:42.344 DEBUG github.com/go-beans/go/ioc/ApplicationContext:221 - Created *playground/internal/app.Service1 [singleton, Lifecycle]
+2026-10-23 20:46:42.349 ERROR github.com/go-beans/go/ioc/ApplicationContext:636 - Application context run failed. *err.RuntimeException: Error creating bean *playground/internal/app.Service1 [singleton, Lifecycle]
+        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstanceWithPath.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:160)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstanceWithPath (D:/dev/go-beans/ioc/ApplicationContext.go:178)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:155)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).orderedBeanInstances.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:543)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).foreachBeanDefinition (D:/dev/go-beans/ioc/ApplicationContext.go:753)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).orderedBeanInstances (D:/dev/go-beans/ioc/ApplicationContext.go:542)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).initializeBeans (D:/dev/go-beans/ioc/ApplicationContext.go:354)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).doRefresh (D:/dev/go-beans/ioc/ApplicationContext.go:249)
+        at github.com/go-beans/go/ioc.(*ApplicationContext).run (D:/dev/go-beans/ioc/ApplicationContext.go:578)
+        at github.com/go-beans/go/ioc.Run (D:/dev/go-beans/ioc/ioc.go:294)
+        at main.main (D:/dev/playground/cmd/app/main.go:67)
+Caused by: *err.RuntimeException: Cannot bind configuration value '${db.pass}' to field 'dbPass'
+        at github.com/go-external-config/go/env.BindPropertiesAny.func1.1 (D:/dev/go-external-config/env/env.go:75)
+        at github.com/go-external-config/go/env.BindPropertiesAny (D:/dev/go-external-config/env/env.go:73)
+        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).injectDependencies (D:/dev/go-beans/ioc/BeanDefinition.go:398)
+        ... 10 more
+Caused by: *err.RuntimeException: Cannot get Consul property app/db/password
+        at github.com/go-external-config/consul/env.(*ConsulPropertySource).getPropertyValue (D:/dev/go-external-config-consul/env/ConsulPropertySource.go:67)
+        at github.com/go-external-config/consul/env.(*ConsulPropertySource).Property (D:/dev/go-external-config-consul/env/ConsulPropertySource.go:58)
+        at github.com/go-external-config/go/env.(*Environment).lookupRawProperty (D:/dev/go-external-config/env/Environment.go:99)
+        at github.com/go-external-config/go/env.(*ExprProcessor).Resolve (D:/dev/go-external-config/env/ExprProcessor.go:62)
+        at github.com/go-jang/go/util/regex.(*PatternProcessor).OverrideResolve.func1 (D:/dev/go-jang/util/regex/PatternProcessor.go:73)
+        at github.com/go-jang/go/util/regex.(*PatternProcessor).ProcessRecursive (D:/dev/go-jang/util/regex/PatternProcessor.go:47)
+        at github.com/go-jang/go/util/regex.(*PatternProcessor).Process (D:/dev/go-jang/util/regex/PatternProcessor.go:24)
+        at github.com/go-external-config/go/env.(*Environment).resolveRequiredPlaceholders (D:/dev/go-external-config/env/Environment.go:110)
+        at github.com/go-external-config/go/env.ResolveRequiredPlaceholders (D:/dev/go-external-config/env/env.go:40)
+        at github.com/go-external-config/go/env.BindPropertiesAny.func1 (D:/dev/go-external-config/env/env.go:77)
         at github.com/go-jang/go/lang/reflect.ForEachTaggedField (D:/dev/go-jang/lang/reflect/reflect.go:39)
-        at github.com/go-beans/go/ioc.injectBeansAny (D:/dev/go-beans/ioc/ioc.go:76)
-        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate (D:/dev/go-beans/ioc/BeanDefinition.go:240)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func2 (D:/dev/go-beans/ioc/ApplicationContext.go:152)
-        at github.com/go-jang/go/util/concurrent.Synchronized (D:/dev/go-jang/util/concurrent/concurrent.go:11)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:149)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).orderedBeanInstances.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:268)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).foreachBeanDefinition (D:/dev/go-beans/ioc/ApplicationContext.go:427)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).orderedBeanInstances (D:/dev/go-beans/ioc/ApplicationContext.go:266)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).executeApplicationRunnerBeans (D:/dev/go-beans/ioc/ApplicationContext.go:320)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).Run (D:/dev/go-beans/ioc/ApplicationContext.go:315)
-        at github.com/go-beans/go/ioc.Run (D:/dev/go-beans/ioc/ioc.go:135)
-        at main.main (D:/dev/playground/cmd/app/main.go:33)
-Caused by: *err.RuntimeException: Cannot inject dependency into field 'service1' of type *app.Service1
-        at github.com/go-beans/go/ioc.(*ApplicationContext).Bean.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:85)
-        ... 20 common frames omitted
-Caused by: *err.RuntimeException: Error creating bean *app.Service1 [singleton lazy]
-        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func1 (D:/dev/go-beans/ioc/ApplicationContext.go:140)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance (D:/dev/go-beans/ioc/ApplicationContext.go:149)
-        ... 20 common frames omitted
-Caused by: *err.RuntimeException: Cannot bind configuration value '${vault.prod/db#password}' to field 'dbPass'
-        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate.BindPropertiesAny.func1.1 (D:/dev/go-external-config/env/env.go:58)
-        at github.com/go-jang/go/util/optional.(*Optional[...]).panicIfEmpty (D:/dev/go-jang/util/optional/Optional.go:80)
-        at github.com/go-jang/go/util/optional.(*Optional[...]).OrElsePanic (D:/dev/go-jang/util/optional/Optional.go:74)
-        at github.com/go-external-config/vault/env.(*VaultPropertySource).getSecretValue (D:/dev/go-external-config-vault/env/VaultPropertySource.go:84)
-        at github.com/go-external-config/vault/env.(*VaultPropertySource).resolveVaultProperty (D:/dev/go-external-config-vault/env/VaultPropertySource.go:80)
-        at github.com/go-external-config/vault/env.(*VaultPropertySource).Property (D:/dev/go-external-config-vault/env/VaultPropertySource.go:60)
-        at github.com/go-external-config/go/env.(*Environment).lookupRawProperty (D:/dev/go-external-config/env/Environment.go:81)
-        at github.com/go-external-config/go/env.(*ExprProcessor).Resolve (D:/dev/go-external-config/env/ExprProcessor.go:64)
-        at github.com/go-external-config/go/env.ExprProcessorOf.(*PatternProcessor).OverrideResolve.func1 (D:/dev/go-external-config/util/regex/PatternProcessor.go:68)
-        at github.com/go-external-config/go/util/regex.(*PatternProcessor).ProcessRecursive (D:/dev/go-external-config/util/regex/PatternProcessor.go:42)
-        at github.com/go-external-config/go/util/regex.(*PatternProcessor).Process (D:/dev/go-external-config/util/regex/PatternProcessor.go:24)
-        at github.com/go-external-config/go/env.(*Environment).ResolveRequiredPlaceholders (D:/dev/go-external-config/env/Environment.go:89)
-        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate.BindPropertiesAny.func1 (D:/dev/go-external-config/env/env.go:60)
-        at github.com/go-jang/go/lang/reflect.ForEachTaggedField (D:/dev/go-jang/lang/reflect/reflect.go:39)
-        at github.com/go-external-config/go/env.BindPropertiesAny (D:/dev/go-external-config/env/env.go:56)
-        at github.com/go-beans/go/ioc.(*BeanDefinitionImpl[...]).instantiate (D:/dev/go-beans/ioc/BeanDefinition.go:239)
-        at github.com/go-beans/go/ioc.(*ApplicationContext).beanInstance.func2 (D:/dev/go-beans/ioc/ApplicationContext.go:152)
-        at github.com/go-jang/go/util/concurrent.Synchronized (D:/dev/go-jang/util/concurrent/concurrent.go:11)
-        ... 21 common frames omitted
-Caused by: *err.RuntimeException: Unable to get prod/db
-        at github.com/go-jang/go/util/optional.(*Optional[...]).panicIfEmpty (D:/dev/go-jang/util/optional/Optional.go:80)
-        ... 37 common frames omitted
-Caused by: *fmt.wrapError: error encountered while reading secret at secret/data/prod/db
-Caused by: *url.Error: Get "http://127.0.0.1:8200/v1/secret/data/prod/db"
-Caused by: *net.OpError: dial tcp 127.0.0.1:8200
+        ... 12 more
+Caused by: *url.Error: Get "http://127.0.0.1:8500/v1/kv/app/db/password"
+Caused by: *net.OpError: dial tcp 127.0.0.1:8500
 Caused by: *os.SyscallError: connectex
 Caused by: syscall.Errno: No connection could be made because the target machine actively refused it.
-2026/05/17 14:39:26 INFO closing context with 8 running services
-2026/05/17 14:39:26 INFO Service2.Stop
-2026/05/17 14:39:26 INFO Service3.Stop
-2026/05/17 14:39:26 INFO context closed in 17.8322ms, uptime 4.3038338s
+2026-10-23 20:46:42.351 INFO  github.com/go-beans/go/ioc/ApplicationContext:603 - Closing application context (3 beans)
+2026-10-23 20:46:42.359 INFO  github.com/go-beans/go/ioc/ApplicationContext:611 - Application context closed in 8.624ms (uptime 20ms)
 exit status 1
 ```
 

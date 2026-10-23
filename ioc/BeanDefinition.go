@@ -567,15 +567,46 @@ func (this *BeanDefinitionImpl[T]) reset() {
 
 // Implements String
 func (this *BeanDefinitionImpl[T]) String() string {
-	return fmt.Sprintf("%s [%s%s%s%s%s%s]%s",
-		this.getFullTypeName(),
-		lang.If(this.scope == Singleton, "singleton", "prototype"),
-		lang.If(this.primary, " primary", ""),
-		lang.If(this.lazy, " lazy", ""),
-		lang.If(this.isLifecycleBean(), " Lifecycle", ""),
-		lang.If(this.isApplicationRunner(), " ApplicationRunner", ""),
-		lang.If(this.isBeanPostProcessor(), " BeanPostProcessor", ""),
-		lang.If(len(this.names) > 0, " "+strings.Join(this.names, ", "), ""))
+	var sb strings.Builder
+
+	sb.WriteString(this.getFullTypeName())
+
+	if len(this.names) > 0 {
+		fmt.Fprintf(&sb, " '%s'", this.names[0])
+
+		if len(this.names) > 1 {
+			sb.WriteString(" (aliases: ")
+			for i, alias := range this.names[1:] {
+				if i > 0 {
+					sb.WriteString(", ")
+				}
+				fmt.Fprintf(&sb, "'%s'", alias)
+			}
+			sb.WriteString(")")
+		}
+	}
+
+	attributes := []string{lang.If(this.scope == Singleton, "singleton", "prototype")}
+
+	if this.primary {
+		attributes = append(attributes, "primary")
+	}
+	if this.lazy {
+		attributes = append(attributes, "lazy")
+	}
+	if this.isLifecycleBean() {
+		attributes = append(attributes, "Lifecycle")
+	}
+	if this.isApplicationRunner() {
+		attributes = append(attributes, "ApplicationRunner")
+	}
+	if this.isBeanPostProcessor() {
+		attributes = append(attributes, "BeanPostProcessor")
+	}
+
+	fmt.Fprintf(&sb, " [%s]", strings.Join(attributes, ", "))
+
+	return sb.String()
 }
 
 type eventListenerMethod struct {

@@ -58,7 +58,7 @@ func applicationContextInstance() *ApplicationContext {
 }
 
 func newApplicationContext() *ApplicationContext {
-	slog.Info(fmt.Sprintf("Starting with PID %d", os.Getpid()))
+	slog.Info(fmt.Sprintf("Starting application (PID %d)", os.Getpid()))
 	context, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
 	return &ApplicationContext{
@@ -234,7 +234,7 @@ func (this *ApplicationContext) eligible(registered, requested reflect.Type) boo
 
 func (this *ApplicationContext) refresh() {
 	defer err.Recover(func(e any) {
-		this.exit1(e, "Context refresh failed.")
+		this.exit1(e, "Application context refresh failed.")
 	})
 	this.doRefresh()
 }
@@ -250,7 +250,7 @@ func (this *ApplicationContext) doRefresh() {
 	this.startLifecycleBeans()
 	this.refreshed.Store(true)
 
-	slog.Info(fmt.Sprintf("Context refreshed with %d beans in %v", len(this.getInstantiated()), time.Since(threshold)))
+	slog.Info(fmt.Sprintf("Application context refreshed in %v (%d beans)", time.Since(threshold).Round(100*time.Microsecond), len(this.getInstantiated())))
 	this.PublishEvent(NewContextRefreshedEvent(this))
 }
 
@@ -571,7 +571,7 @@ func (this *ApplicationContext) orderedBeanInstances(beans []BeanDefinition, fil
 func (this *ApplicationContext) run() {
 	defer err.Recover(func(e any) {
 		this.publishEvent(NewApplicationFailedEvent(e), true)
-		this.exit1(e, "Context run failed.")
+		this.exit1(e, "Application context run failed.")
 	})
 
 	if !this.refreshed.Load() {
@@ -600,7 +600,7 @@ func (this *ApplicationContext) close() {
 	concurrent.Synchronized(&applicationContextMu, func() {
 		if this.closing.CompareAndSwap(false, true) {
 			threshold := time.Now()
-			slog.Info(fmt.Sprintf("Closing context with %d beans", len(this.getInstantiated())))
+			slog.Info(fmt.Sprintf("Closing application context (%d beans)", len(this.getInstantiated())))
 			this.publishEvent(NewContextClosedEvent(), true)
 
 			this.cancel()
@@ -608,7 +608,7 @@ func (this *ApplicationContext) close() {
 			this.destroyBeans()
 			resetBeanDefinitions()
 
-			slog.Info(fmt.Sprintf("Context closed in %v, uptime %v", time.Since(threshold), time.Since(this.startTime)))
+			slog.Info(fmt.Sprintf("Application context closed in %v (uptime %v)", time.Since(threshold).Round(time.Microsecond), time.Since(this.startTime).Round(10*time.Millisecond)))
 			applicationContext.CompareAndSwap(this, nil)
 		}
 	})
